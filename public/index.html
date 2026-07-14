@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Razorpay Webhook Payments Dashboard - Infiplus</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Load Lucide icons for UI symbols -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div>
+        <h1>Razorpay Payments</h1>
+        <div class="subtitle">Real-time payment webhook tracking for raz.infiplus.in</div>
+      </div>
+      <div class="connection-status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Server Active</span>
+      </div>
+    </header>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-value" id="stat-revenue">₹0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Successful Payments</div>
+        <div class="stat-value" id="stat-success-count">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Failed Payments</div>
+        <div class="stat-value" id="stat-failed-count">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Transactions</div>
+        <div class="stat-value" id="stat-total-count">0</div>
+      </div>
+    </div>
+
+    <!-- Payments List Card -->
+    <div class="dashboard-card">
+      <div class="card-header">
+        <div class="card-title">Payment History</div>
+        <div>
+          <button class="btn btn-secondary" id="btn-refresh">
+            <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
+            Refresh
+          </button>
+        </div>
+      </div>
+      
+      <!-- Payments Table -->
+      <div class="table-wrapper">
+        <table id="payments-table">
+          <thead>
+            <tr>
+              <th>Payment ID</th>
+              <th>Payer / Contact</th>
+              <th>Company Name</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Method</th>
+              <th>Transaction Date</th>
+              <th style="text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="payments-body">
+            <!-- Loading and empty states managed dynamically in JS -->
+            <tr>
+              <td colspan="8" class="empty-state">
+                <i data-lucide="loader" class="spin" style="width: 24px; height: 24px;"></i>
+                <p>Loading payments data...</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Payload Modal -->
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">Payment Details</div>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div>
+            <strong>Payment ID:</strong> <span id="modal-pay-id">-</span>
+          </div>
+          <div>
+            <strong>Status:</strong> <span id="modal-pay-status">-</span>
+          </div>
+          <div>
+            <strong>Payer Email:</strong> <span id="modal-pay-email">-</span>
+          </div>
+          <div>
+            <strong>Payer Contact:</strong> <span id="modal-pay-phone">-</span>
+          </div>
+          <div>
+            <strong>Company Name:</strong> <span id="modal-pay-company">-</span>
+          </div>
+          <div>
+            <strong>Created At:</strong> <span id="modal-pay-date">-</span>
+          </div>
+        </div>
+        <strong>Raw Webhook Payload (JSON):</strong>
+        <pre><code id="modal-raw-payload">-</code></pre>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="modal-btn-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
