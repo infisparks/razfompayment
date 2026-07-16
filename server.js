@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const db = require('./db');
+const whatsappService = require('./services/whatsappService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -65,6 +66,7 @@ app.post('/webhook', (req, res) => {
 
   // We are primarily tracking payment.captured and payment.failed
   if (event === 'payment.captured' || event === 'payment.failed') {
+    console.log('Payment Received');
     const payment = payload.payload.payment.entity;
 
     const payment_id = payment.id;
@@ -99,7 +101,26 @@ app.post('/webhook', (req, res) => {
       if (err) {
         console.error('Failed to store payment in database:', err.message);
       } else {
+        console.log('Payment Stored');
         console.log(`Payment stored/updated: ${payment_id} - ${status}`);
+
+        // Only send WhatsApp message if payment status is captured
+        if (status === 'captured') {
+          console.log('Sending WhatsApp...');
+          whatsappService.sendPaymentSuccess(phone, company_name, amount)
+            .then((result) => {
+              if (result.success) {
+                console.log('WhatsApp Sent Successfully');
+              } else {
+                console.log('WhatsApp Failed');
+                console.error(`WhatsApp send failed for Payment ID: ${payment_id}, Phone: ${phone}. Error response:`, JSON.stringify(result.error));
+              }
+            })
+            .catch((error) => {
+              console.log('WhatsApp Failed');
+              console.error(`WhatsApp send error for Payment ID: ${payment_id}, Phone: ${phone}. Error:`, error.message || error);
+            });
+        }
       }
     });
   }
