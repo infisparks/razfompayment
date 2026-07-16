@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const db = require('./db');
 const whatsappService = require('./services/whatsappService');
+const whatsappWebhookService = require('./services/whatsappWebhookService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -111,6 +112,27 @@ app.post('/webhook', (req, res) => {
             .then((result) => {
               if (result.success) {
                 console.log('WhatsApp Sent Successfully');
+                console.log('WhatsApp Accepted');
+
+                // Extract message ID to store
+                const message_id = result.data && result.data.messages && result.data.messages[0] ? result.data.messages[0].id : null;
+                const recipient = result.data && result.data.contacts && result.data.contacts[0] ? result.data.contacts[0].wa_id : phone;
+
+                if (message_id) {
+                  const logQuery = `
+                    INSERT INTO whatsapp_logs (message_id, recipient, payment_id, status, raw_payload)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(message_id) DO UPDATE SET
+                      payment_id = COALESCE(excluded.payment_id, whatsapp_logs.payment_id),
+                      status = excluded.status,
+                      raw_payload = excluded.raw_payload
+                  `;
+                  db.run(logQuery, [message_id, recipient, payment_id, 'accepted', JSON.stringify(result.data)], (logErr) => {
+                    if (logErr) {
+                      console.error('Failed to insert initial WhatsApp log:', logErr.message);
+                    }
+                  });
+                }
               } else {
                 console.log('WhatsApp Failed');
                 console.error(`WhatsApp send failed for Payment ID: ${payment_id}, Phone: ${phone}. Error response:`, JSON.stringify(result.error));
@@ -126,6 +148,38 @@ app.post('/webhook', (req, res) => {
   }
 
   res.json({ status: 'ok' });
+});
+
+// GET route for WhatsApp Webhook Verification
+app.get('/whatsapp/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || 'infiplus_whatsapp_verify';
+
+  if (mode === 'subscribe' && token === verifyToken) {
+    console.log('WhatsApp Webhook Verified Successfully');
+    return res.status(200).send(challenge);
+  } else {
+    console.error('WhatsApp Webhook verification failed! Token mismatch.');
+    return res.sendStatus(403);
+  }
+});
+
+// POST route to receive WhatsApp Webhook updates
+app.post('/whatsapp/webhook', (req, res) => {
+  const payload = req.body;
+  
+  // Return HTTP 200 immediately to Meta
+  res.status(200).json({ status: 'ok' });
+
+  // Process the webhook asynchronously so we never block Meta
+  try {
+    whatsappWebhookService.parseWebhook(payload);
+  } catch (error) {
+    console.error('Error processing WhatsApp Webhook payload:', error.message || error);
+  }
 });
 
 // Start server
