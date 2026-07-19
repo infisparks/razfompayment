@@ -1,199 +1,58 @@
-// Local state containers
-let payments = [];
+// Valdho Appointments Single Unified Dashboard Script
 let valdhoAppointments = [];
-let currentTab = 'razorpay';
+let scheduledQueue = [];
+let countdownTimerInterval = null;
 
-// Safe DOM event listener helper
 function safeAddListener(id, event, handler) {
   const el = document.getElementById(id);
-  if (el) {
-    el.addEventListener(event, handler);
-  }
+  if (el) el.addEventListener(event, handler);
 }
 
-// Tab Switching Function
-window.switchTab = function(tabName) {
-  currentTab = tabName;
-  const tabRazorpay = document.getElementById('tab-razorpay');
-  const tabValdho = document.getElementById('tab-valdho');
-  const viewRazorpay = document.getElementById('view-razorpay');
-  const viewValdho = document.getElementById('view-valdho');
-  const pageTitle = document.getElementById('page-title');
-  const pageSubtitle = document.getElementById('page-subtitle');
-
-  if (tabName === 'razorpay') {
-    if (tabRazorpay) tabRazorpay.classList.add('active');
-    if (tabValdho) tabValdho.classList.remove('active');
-    if (viewRazorpay) viewRazorpay.style.display = 'block';
-    if (viewValdho) viewValdho.style.display = 'none';
-
-    if (pageTitle) pageTitle.textContent = 'Razorpay Payments';
-    if (pageSubtitle) pageSubtitle.textContent = 'Real-time payment webhook tracking for raz.infiplus.in';
-    fetchPayments();
-  } else if (tabName === 'valdho') {
-    if (tabValdho) tabValdho.classList.add('active');
-    if (tabRazorpay) tabRazorpay.classList.remove('active');
-    if (viewValdho) viewValdho.style.display = 'block';
-    if (viewRazorpay) viewRazorpay.style.display = 'none';
-
-    if (pageTitle) pageTitle.textContent = 'valdho_first_option_agency';
-    if (pageSubtitle) pageSubtitle.textContent = 'Real-time appointment webhook tracking stored under Firebase node /firstoption_agency';
-    fetchValdhoAppointments();
-  }
-};
-
-// Fetch Razorpay payments from API
-async function fetchPayments() {
-  const paymentsBody = document.getElementById('payments-body');
+// -------------------------------------------------------------
+// FETCH APPOINTMENTS & SCHEDULES
+// -------------------------------------------------------------
+async function fetchValdhoAppointments() {
+  const valdhoBody = document.getElementById('valdho-body');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
 
   try {
-    const res = await fetch('/api/payments');
-    if (!res.ok) throw new Error('API server returned error response');
-    
-    payments = await res.json();
-    
+    const [resApp, resSched] = await Promise.all([
+      fetch('/api/valdho/appointments'),
+      fetch('/api/valdho/whatsapp/schedules')
+    ]);
+
+    if (!resApp.ok) throw new Error('Failed to fetch Valdho appointments');
+
+    const dataApp = await resApp.json();
+    valdhoAppointments = Array.isArray(dataApp) ? dataApp : [];
+
+    if (resSched.ok) {
+      const dataSched = await resSched.json();
+      scheduledQueue = Array.isArray(dataSched) ? dataSched : (typeof dataSched === 'object' && dataSched !== null ? Object.values(dataSched) : []);
+    }
+
     if (statusDot) {
       statusDot.style.backgroundColor = '#10b981';
       statusDot.style.boxShadow = '0 0 8px #10b981';
     }
-    if (statusText) statusText.textContent = 'Server Connected';
-    
-    renderPaymentsTable();
-    updateStatsGrid();
+    if (statusText) statusText.textContent = 'Server Active';
+
+    renderValdhoTable();
+    updateValdhoStats();
+    startCountdownTicker();
   } catch (error) {
-    console.error('Error fetching payments:', error);
-    
+    console.error('Error fetching appointments:', error);
     if (statusDot) {
       statusDot.style.backgroundColor = '#ef4444';
       statusDot.style.boxShadow = '0 0 8px #ef4444';
     }
     if (statusText) statusText.textContent = 'Server Disconnected';
-    
-    if (paymentsBody) {
-      paymentsBody.innerHTML = `
-        <tr>
-          <td colspan="8" class="empty-state" style="color: #ef4444;">
-            <i data-lucide="alert-triangle" style="width: 24px; height: 24px; color: #ef4444; margin-bottom: 8px;"></i>
-            <p>Failed to connect to the backend server. Please verify the Express app is running.</p>
-          </td>
-        </tr>
-      `;
-    }
-    if (window.lucide) lucide.createIcons();
-  }
-}
 
-// Render payments inside table
-function renderPaymentsTable() {
-  const paymentsBody = document.getElementById('payments-body');
-  if (!paymentsBody) return;
-
-  if (payments.length === 0) {
-    paymentsBody.innerHTML = `
-      <tr>
-        <td colspan="8" class="empty-state">
-          <i data-lucide="inbox" style="width: 24px; height: 24px; margin-bottom: 8px;"></i>
-          <p>No payments received yet. Configure your Razorpay webhook and run a payment to inspect.</p>
-        </td>
-      </tr>
-    `;
-    if (window.lucide) lucide.createIcons();
-    return;
-  }
-
-  paymentsBody.innerHTML = payments.map(pay => {
-    const formattedAmount = (pay.amount / 100).toLocaleString('en-IN', {
-      style: 'currency',
-      currency: pay.currency || 'INR'
-    });
-    
-    const date = pay.created_at 
-      ? new Date(pay.created_at * 1000).toLocaleString('en-IN') 
-      : new Date(pay.received_at).toLocaleString('en-IN');
-      
-    const statusClass = `badge-${(pay.status || 'captured').toLowerCase()}`;
-    
-    return `
-      <tr>
-        <td data-label="Payment ID"><strong>${pay.payment_id}</strong></td>
-        <td data-label="Payer / Contact">
-          <div class="payer-info">
-            <span class="payer-email">${pay.email || 'N/A'}</span>
-            <span class="payer-phone">${pay.phone || 'N/A'}</span>
-          </div>
-        </td>
-        <td data-label="Company Name">${pay.company_name || '<em style="color: #9ca3af;">None</em>'}</td>
-        <td data-label="Amount"><strong>${formattedAmount}</strong></td>
-        <td data-label="Status">
-          <span class="badge ${statusClass}">${pay.status}</span>
-        </td>
-        <td data-label="Method">
-          <span class="method-badge">${pay.method || 'N/A'}</span>
-        </td>
-        <td data-label="Transaction Date">${date}</td>
-        <td data-label="Action" style="text-align: right;">
-          <button class="btn btn-secondary" onclick="openDetails('${pay.payment_id}')">
-            Inspect
-          </button>
-        </td>
-      </tr>
-    `;
-  }).join('');
-  
-  if (window.lucide) lucide.createIcons();
-}
-
-// Recalculate Razorpay metrics
-function updateStatsGrid() {
-  let totalRevenue = 0;
-  let successCount = 0;
-  let failedCount = 0;
-
-  payments.forEach(pay => {
-    const status = (pay.status || '').toLowerCase();
-    if (status === 'captured' || status === 'success') {
-      totalRevenue += pay.amount;
-      successCount++;
-    } else if (status === 'failed') {
-      failedCount++;
-    }
-  });
-
-  const formattedRevenue = (totalRevenue / 100).toLocaleString('en-IN', {
-    style: 'currency',
-    currency: 'INR'
-  });
-
-  const statRevenue = document.getElementById('stat-revenue');
-  const statSuccessCount = document.getElementById('stat-success-count');
-  const statFailedCount = document.getElementById('stat-failed-count');
-  const statTotalCount = document.getElementById('stat-total-count');
-
-  if (statRevenue) statRevenue.textContent = formattedRevenue;
-  if (statSuccessCount) statSuccessCount.textContent = successCount;
-  if (statFailedCount) statFailedCount.textContent = failedCount;
-  if (statTotalCount) statTotalCount.textContent = payments.length;
-}
-
-// Fetch Valdho Appointments from API
-async function fetchValdhoAppointments() {
-  const valdhoBody = document.getElementById('valdho-body');
-
-  try {
-    const res = await fetch('/api/valdho/appointments');
-    if (!res.ok) throw new Error('Failed to fetch Valdho appointments');
-
-    valdhoAppointments = await res.json();
-    renderValdhoTable();
-    updateValdhoStats();
-  } catch (error) {
-    console.error('Error fetching Valdho appointments:', error);
     if (valdhoBody) {
       valdhoBody.innerHTML = `
         <tr>
-          <td colspan="6" class="empty-state" style="color: #ef4444;">
+          <td colspan="7" class="empty-state" style="color: #ef4444;">
             <i data-lucide="alert-triangle" style="width: 24px; height: 24px; margin-bottom: 8px;"></i>
             <p>Error loading Valdho appointment data.</p>
           </td>
@@ -204,7 +63,6 @@ async function fetchValdhoAppointments() {
   }
 }
 
-// Render Valdho Appointments Table with Full Form vs Half Form badges
 function renderValdhoTable() {
   const valdhoBody = document.getElementById('valdho-body');
   if (!valdhoBody) return;
@@ -212,7 +70,7 @@ function renderValdhoTable() {
   if (valdhoAppointments.length === 0) {
     valdhoBody.innerHTML = `
       <tr>
-        <td colspan="6" class="empty-state">
+        <td colspan="7" class="empty-state">
           <i data-lucide="folder-open" style="width: 24px; height: 24px; margin-bottom: 8px;"></i>
           <p>No appointments in <strong>firstoption_agency</strong> node yet. Submit a Valdho form to test live webhook storage.</p>
         </td>
@@ -227,31 +85,20 @@ function renderValdhoTable() {
     let step2Data = {};
     let step1Data = {};
 
-    try {
-      allData = typeof app.all_form_data === 'string' ? JSON.parse(app.all_form_data) : (app.all_form_data || {});
-    } catch (e) { allData = app.all_form_data || {}; }
+    try { allData = typeof app.all_form_data === 'string' ? JSON.parse(app.all_form_data) : (app.all_form_data || {}); } catch (e) {}
+    try { step2Data = typeof app.step2_data === 'string' ? JSON.parse(app.step2_data) : (app.step2_data || {}); } catch (e) {}
+    try { step1Data = typeof app.step1_data === 'string' ? JSON.parse(app.step1_data) : (app.step1_data || {}); } catch (e) {}
 
-    try {
-      step2Data = typeof app.step2_data === 'string' ? JSON.parse(app.step2_data) : (app.step2_data || {});
-    } catch (e) { step2Data = app.step2_data || {}; }
-
-    try {
-      step1Data = typeof app.step1_data === 'string' ? JSON.parse(app.step1_data) : (app.step1_data || {});
-    } catch (e) { step1Data = app.step1_data || {}; }
-
-    // Check if Full Form (Completed) or Half Form (Step 1 Only)
     const hasStep2Data = Object.keys(step2Data).length > 0;
     const isCompleted = app.status === 'completed' || hasStep2Data;
 
-    // Extract choices from step 2 / all form data
     const choices = [];
     const targetSource = hasStep2Data ? step2Data : allData;
-    
+
     Object.keys(targetSource).forEach(key => {
       const val = targetSource[key];
-      if (Array.isArray(val)) {
-        choices.push(...val);
-      } else if (typeof val === 'string' && !key.toLowerCase().includes('email') && !key.toLowerCase().includes('name') && !key.toLowerCase().includes('phone')) {
+      if (Array.isArray(val)) choices.push(...val);
+      else if (typeof val === 'string' && !key.toLowerCase().includes('email') && !key.toLowerCase().includes('name') && !key.toLowerCase().includes('phone')) {
         choices.push(val);
       }
     });
@@ -260,15 +107,19 @@ function renderValdhoTable() {
       ? choices.map(c => `<span class="choice-pill">${c}</span>`).join('')
       : '<em style="color: #d97706; font-size: 13px; font-weight: 500;">⚠️ Step 2 Pending...</em>';
 
-    // Status Badge: Full Form vs Half Form
     const statusBadge = isCompleted
-      ? `<span class="badge badge-captured" style="background-color: #def7ec; color: #03543f; font-weight: 600;">Full Form (Completed)</span>`
-      : `<span class="badge badge-pending" style="background-color: #fef3c7; color: #92400e; font-weight: 600;">Half Form (Step 1 Only)</span>`;
+      ? `<span class="badge badge-captured">Full Form (Completed)</span>`
+      : `<span class="badge badge-pending">Half Form (Step 1 Only)</span>`;
 
     const name = app.name || step1Data['First Name'] || 'Valdho Lead';
     const email = app.email || step1Data['Email'] || 'N/A';
     const phone = app.phone || step1Data['Phone Number'] || 'N/A';
     const updatedDate = app.updated_at || app.created_at ? new Date(app.updated_at || app.created_at).toLocaleString('en-IN') : '-';
+
+    const emailKey = email.toLowerCase().trim().replace(/[^a-zA-Z0-9]/g, '_');
+    const leadSched = (scheduledQueue || []).find(s => s.email && s.email.toLowerCase().trim() === email.toLowerCase().trim() && s.status === 'pending');
+    
+    let leadCountdownHtml = getCountdownBadgeHtml(leadSched ? leadSched.scheduled_at : null, isCompleted);
 
     return `
       <tr>
@@ -281,10 +132,15 @@ function renderValdhoTable() {
         <td data-label="Phone Number"><strong>${phone}</strong></td>
         <td data-label="Form Selections / Answers">${choicesHtml}</td>
         <td data-label="Status">${statusBadge}</td>
+        <td data-label="Next Message Countdown" id="lead-countdown-${emailKey}">${leadCountdownHtml}</td>
         <td data-label="Last Submission">${updatedDate}</td>
-        <td data-label="Action" style="text-align: right;">
-          <button class="btn btn-secondary" onclick="openValdhoDetails('${email}')">
-            Inspect Data
+        <td data-label="Actions" style="text-align: right; white-space: nowrap;">
+          <button class="btn btn-secondary" onclick="openValdhoDetails('${email}')" style="padding: 6px 12px; font-size: 13px; margin-right: 4px;">
+            Inspect
+          </button>
+          <button class="btn btn-danger" onclick="deleteAppointment('${email}', '${name.replace(/'/g, "\\'")}')" style="padding: 6px 12px; font-size: 13px;">
+            <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+            Delete
           </button>
         </td>
       </tr>
@@ -294,7 +150,6 @@ function renderValdhoTable() {
   if (window.lucide) lucide.createIcons();
 }
 
-// Update Valdho statistics grid
 function updateValdhoStats() {
   const total = valdhoAppointments.length;
   let completed = 0;
@@ -302,168 +157,120 @@ function updateValdhoStats() {
 
   valdhoAppointments.forEach(app => {
     let step2Data = {};
-    try {
-      step2Data = typeof app.step2_data === 'string' ? JSON.parse(app.step2_data) : (app.step2_data || {});
-    } catch (e) { step2Data = app.step2_data || {}; }
-
-    if (app.status === 'completed' || Object.keys(step2Data).length > 0) {
-      completed++;
-    } else {
-      step1++;
-    }
+    try { step2Data = typeof app.step2_data === 'string' ? JSON.parse(app.step2_data) : (app.step2_data || {}); } catch (e) {}
+    if (app.status === 'completed' || Object.keys(step2Data).length > 0) completed++;
+    else step1++;
   });
 
-  const statValdhoTotal = document.getElementById('stat-valdho-total');
-  const statValdhoCompleted = document.getElementById('stat-valdho-completed');
-  const statValdhoStep1 = document.getElementById('stat-valdho-step1');
+  const statTotal = document.getElementById('stat-valdho-total');
+  const statCompleted = document.getElementById('stat-valdho-completed');
+  const statStep1 = document.getElementById('stat-valdho-step1');
 
-  if (statValdhoTotal) statValdhoTotal.textContent = total;
-  if (statValdhoCompleted) statValdhoCompleted.textContent = completed;
-  if (statValdhoStep1) statValdhoStep1.textContent = step1;
+  if (statTotal) statTotal.textContent = total;
+  if (statCompleted) statCompleted.textContent = completed;
+  if (statStep1) statStep1.textContent = step1;
 }
 
-// Open Payment inspection modal
-window.openDetails = function(paymentId) {
-  const pay = payments.find(p => p.payment_id === paymentId);
-  if (!pay) return;
-
-  const date = pay.created_at 
-    ? new Date(pay.created_at * 1000).toLocaleString('en-IN') 
-    : new Date(pay.received_at).toLocaleString('en-IN');
-
-  const modalTitle = document.getElementById('modal-title');
-  const modalPayId = document.getElementById('modal-pay-id');
-  const modalPayStatus = document.getElementById('modal-pay-status');
-  const modalPayEmail = document.getElementById('modal-pay-email');
-  const modalPayPhone = document.getElementById('modal-pay-phone');
-  const modalPayCompany = document.getElementById('modal-pay-company');
-  const modalPayDate = document.getElementById('modal-pay-date');
-  const modalRawPayload = document.getElementById('modal-raw-payload');
-  const modalBackdrop = document.getElementById('modal-backdrop');
-
-  if (modalTitle) modalTitle.textContent = `Inspect Payment: ${pay.payment_id}`;
-  if (modalPayId) modalPayId.textContent = pay.payment_id;
-  if (modalPayStatus) modalPayStatus.innerHTML = `<span class="badge badge-${(pay.status || '').toLowerCase()}">${pay.status}</span>`;
-  if (modalPayEmail) modalPayEmail.textContent = pay.email || 'N/A';
-  if (modalPayPhone) modalPayPhone.textContent = pay.phone || 'N/A';
-  if (modalPayCompany) modalPayCompany.textContent = pay.company_name || 'N/A';
-  if (modalPayDate) modalPayDate.textContent = date;
-  
-  if (modalRawPayload) {
-    try {
-      const rawObj = JSON.parse(pay.raw_payload);
-      modalRawPayload.textContent = JSON.stringify(rawObj, null, 2);
-    } catch (e) {
-      modalRawPayload.textContent = pay.raw_payload || 'No raw payload available.';
-    }
+// -------------------------------------------------------------
+// LIVE COUNTDOWN TIMER CALCULATOR (1-SECOND REAL-TIME DECREASE)
+// -------------------------------------------------------------
+function getCountdownBadgeHtml(targetIso, isCompleted) {
+  if (!targetIso) {
+    if (isCompleted) return `<span class="badge badge-captured" style="background-color: #ecfdf5; color: #059669; font-weight: 600;">Full Form Completed ✅</span>`;
+    return '<span class="badge badge-pending" style="background-color: #fef3c7; color: #92400e;">Scheduling 5m... ⏳</span>';
   }
 
-  if (modalBackdrop) modalBackdrop.classList.add('active');
-};
+  const diffMs = new Date(targetIso).getTime() - Date.now();
 
-// Open Valdho appointment inspection modal
+  if (diffMs <= 0) {
+    return `<span class="badge" style="background-color: #ef4444; color: white;">⚡ Sending 5m Message...</span>`;
+  }
+
+  const totalSecs = Math.floor(diffMs / 1000);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+
+  let timeString = '';
+  if (mins > 0) {
+    timeString = `${mins}m ${secs}s remaining`;
+  } else {
+    timeString = `${secs}s remaining`;
+  }
+
+  return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 6px;">⏳ ${timeString}</span>`;
+}
+
+function startCountdownTicker() {
+  if (countdownTimerInterval) clearInterval(countdownTimerInterval);
+  countdownTimerInterval = setInterval(() => {
+    if (valdhoAppointments && valdhoAppointments.length > 0) {
+      valdhoAppointments.forEach(app => {
+        const email = (app.email || '').toLowerCase().trim();
+        const emailKey = email.replace(/[^a-zA-Z0-9]/g, '_');
+        const el = document.getElementById(`lead-countdown-${emailKey}`);
+        if (el) {
+          const leadSched = (scheduledQueue || []).find(s => s.email && s.email.toLowerCase().trim() === email && s.status === 'pending');
+          const isCompleted = app.status === 'completed' || (app.step2_data && Object.keys(app.step2_data).length > 0);
+          el.innerHTML = getCountdownBadgeHtml(leadSched ? leadSched.scheduled_at : null, isCompleted);
+        }
+      });
+    }
+  }, 1000);
+}
+
+// Inspect Lead Details
 window.openValdhoDetails = function(email) {
   const app = valdhoAppointments.find(a => a.email === email);
   if (!app) return;
 
-  const modalTitle = document.getElementById('modal-title');
-  const modalPayId = document.getElementById('modal-pay-id');
-  const modalPayStatus = document.getElementById('modal-pay-status');
-  const modalPayEmail = document.getElementById('modal-pay-email');
-  const modalPayPhone = document.getElementById('modal-pay-phone');
-  const modalPayCompany = document.getElementById('modal-pay-company');
-  const modalPayDate = document.getElementById('modal-pay-date');
-  const modalRawPayload = document.getElementById('modal-raw-payload');
-  const modalBackdrop = document.getElementById('modal-backdrop');
+  const isCompleted = app.status === 'completed';
+  document.getElementById('modal-title').textContent = `Valdho Lead: ${app.name || app.email}`;
+  document.getElementById('modal-pay-id').textContent = app.email;
+  document.getElementById('modal-pay-status').innerHTML = isCompleted
+    ? `<span class="badge badge-captured">Full Form (Completed)</span>`
+    : `<span class="badge badge-pending">Half Form (Step 1 Only)</span>`;
+  document.getElementById('modal-pay-email').textContent = app.email;
+  document.getElementById('modal-pay-phone').textContent = app.phone || 'N/A';
+  document.getElementById('modal-pay-date').textContent = app.updated_at ? new Date(app.updated_at).toLocaleString('en-IN') : '-';
+  document.getElementById('modal-raw-payload').textContent = JSON.stringify(app, null, 2);
 
-  let step2Data = {};
-  try {
-    step2Data = typeof app.step2_data === 'string' ? JSON.parse(app.step2_data) : (app.step2_data || {});
-  } catch (e) {}
-
-  const isCompleted = app.status === 'completed' || Object.keys(step2Data).length > 0;
-
-  if (modalTitle) modalTitle.textContent = `Valdho Lead: ${app.name || app.email}`;
-  if (modalPayId) modalPayId.textContent = app.email;
-  if (modalPayStatus) {
-    modalPayStatus.innerHTML = isCompleted
-      ? `<span class="badge badge-captured" style="background-color: #def7ec; color: #03543f;">Full Form (Completed)</span>`
-      : `<span class="badge badge-pending" style="background-color: #fef3c7; color: #92400e;">Half Form (Step 1 Only)</span>`;
-  }
-  if (modalPayEmail) modalPayEmail.textContent = app.email;
-  if (modalPayPhone) modalPayPhone.textContent = app.phone || 'N/A';
-  if (modalPayCompany) modalPayCompany.textContent = `Firebase Node: /firstoption_agency`;
-  if (modalPayDate) modalPayDate.textContent = app.updated_at ? new Date(app.updated_at).toLocaleString('en-IN') : '-';
-
-  if (modalRawPayload) modalRawPayload.textContent = JSON.stringify(app, null, 2);
-  if (modalBackdrop) modalBackdrop.classList.add('active');
+  document.getElementById('modal-backdrop').classList.add('active');
 };
 
-// Close inspection modal
-function closeModal() {
-  const modalBackdrop = document.getElementById('modal-backdrop');
-  if (modalBackdrop) modalBackdrop.classList.remove('active');
-}
+// Delete Appointment (Deletes lead + cancels all scheduled messages)
+window.deleteAppointment = async function(email, name) {
+  if (!confirm(`Are you sure you want to delete appointment for "${name}" (${email})?\n\nThis will also CANCEL and DELETE all pending scheduled WhatsApp follow-up messages.`)) {
+    return;
+  }
 
-// Close Integration Modal
-function closeIntegrationModal() {
-  const modalIntegrationBackdrop = document.getElementById('modal-integration-backdrop');
-  if (modalIntegrationBackdrop) modalIntegrationBackdrop.classList.remove('active');
-}
+  try {
+    const res = await fetch('/api/valdho/appointments/' + encodeURIComponent(email), {
+      method: 'DELETE'
+    });
 
-// Set up event listeners safely on DOMContentLoaded
+    if (res.ok) {
+      alert(`Appointment for ${name} deleted and all scheduled WhatsApp messages canceled!`);
+      fetchValdhoAppointments();
+    } else {
+      const data = await res.json();
+      alert(`Error deleting appointment: ${data.error || 'Unknown error'}`);
+    }
+  } catch (err) {
+    alert(`Failed to delete appointment: ${err.message}`);
+  }
+};
+
+function closeModal() { document.getElementById('modal-backdrop').classList.remove('active'); }
+
+// DOM Initialization
 document.addEventListener('DOMContentLoaded', () => {
   safeAddListener('modal-close', 'click', closeModal);
   safeAddListener('modal-btn-close', 'click', closeModal);
-  
-  const modalBackdrop = document.getElementById('modal-backdrop');
-  if (modalBackdrop) {
-    modalBackdrop.addEventListener('click', (e) => {
-      if (e.target === modalBackdrop) closeModal();
-    });
-  }
-
-  // Refresh buttons
-  safeAddListener('btn-refresh-payments', 'click', fetchPayments);
-  safeAddListener('btn-refresh', 'click', fetchPayments);
   safeAddListener('btn-refresh-valdho', 'click', fetchValdhoAppointments);
 
-  // Add Integration Modal triggers
-  safeAddListener('btn-open-integration-modal', 'click', () => {
-    const modalIntegrationBackdrop = document.getElementById('modal-integration-backdrop');
-    if (modalIntegrationBackdrop) modalIntegrationBackdrop.classList.add('active');
-  });
-
-  safeAddListener('modal-integration-close', 'click', closeIntegrationModal);
-  safeAddListener('btn-cancel-integration', 'click', closeIntegrationModal);
-  
-  const modalIntegrationBackdrop = document.getElementById('modal-integration-backdrop');
-  if (modalIntegrationBackdrop) {
-    modalIntegrationBackdrop.addEventListener('click', (e) => {
-      if (e.target === modalIntegrationBackdrop) closeIntegrationModal();
-    });
-  }
-
-  // Integration Form Submit
-  const formAddIntegration = document.getElementById('form-add-integration');
-  if (formAddIntegration) {
-    formAddIntegration.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const name = document.getElementById('integration-name').value;
-      const url = document.getElementById('integration-url').value;
-      const method = document.getElementById('integration-method').value;
-
-      alert(`Integration "${name}" added successfully!\n\nWebhook Endpoint: ${url}\nMethod: ${method}`);
-      closeIntegrationModal();
-      switchTab('valdho');
-    });
-  }
-
-  // Initial load
-  fetchPayments();
+  fetchValdhoAppointments();
 });
 
-// Also trigger immediately if DOM is already ready
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
-  fetchPayments();
+  fetchValdhoAppointments();
 }

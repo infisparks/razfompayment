@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Razorpay Webhook Payments Dashboard - Infiplus</title>
-  <link rel="stylesheet" href="style.css">
+  <title>valdho_first_option_agency - Automation & Webhook Dashboard</title>
+  <link rel="stylesheet" href="style.css?v=4.0">
   <!-- Load Lucide icons for UI symbols -->
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -13,87 +13,78 @@
     <!-- Header -->
     <header>
       <div>
-        <h1 id="page-title">Razorpay Payments</h1>
-        <div class="subtitle" id="page-subtitle">Real-time payment webhook tracking for raz.infiplus.in</div>
+        <h1 id="page-title">valdho_first_option_agency</h1>
+        <div class="subtitle" id="page-subtitle">Real-time appointment webhooks & Evolution WhatsApp scheduling engine</div>
       </div>
-      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-        <button class="btn" id="btn-open-integration-modal" style="background-color: #1e1b4b; color: white;">
-          <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
-          Add New Integration
-        </button>
+      <div style="display: flex; align-items: center; gap: 12px;">
         <div class="connection-status">
-          <span class="status-dot" id="status-dot"></span>
+          <span class="status-dot" id="status-dot" style="background-color: #10b981; box-shadow: 0 0 8px #10b981;"></span>
           <span id="status-text">Server Active</span>
         </div>
       </div>
     </header>
 
-    <!-- Navigation Tabs / Page Switcher -->
+    <!-- Navigation Tabs -->
     <div class="nav-tabs">
-      <a href="/" class="nav-tab active" style="text-decoration: none;">
-        <i data-lucide="credit-card" style="width: 16px; height: 16px;"></i>
-        Razorpay Payments
-      </a>
-      <a href="/valdho_first_option_agency.html" class="nav-tab" style="text-decoration: none;">
+      <a href="/index.html" class="nav-tab active" style="text-decoration: none;">
         <i data-lucide="folder" style="width: 16px; height: 16px;"></i>
         valdho_first_option_agency
       </a>
     </div>
 
-    <!-- RAZORPAY PAYMENTS VIEW -->
-    <div id="view-razorpay">
+    <!-- VALDHO APPOINTMENTS VIEW -->
+    <div id="view-valdho">
       <!-- Stats Grid -->
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-label">Total Revenue</div>
-          <div class="stat-value" id="stat-revenue">₹0.00</div>
+          <div class="stat-label">Total Appointments</div>
+          <div class="stat-value" id="stat-valdho-total">0</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Successful Payments</div>
-          <div class="stat-value" id="stat-success-count">0</div>
+          <div class="stat-label">Completed 2-Step (Full Form)</div>
+          <div class="stat-value" id="stat-valdho-completed" style="color: #059669;">0</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Failed Payments</div>
-          <div class="stat-value" id="stat-failed-count">0</div>
+          <div class="stat-label">Step 1 Received (Half Form)</div>
+          <div class="stat-value" id="stat-valdho-step1" style="color: #d97706;">0</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Total Transactions</div>
-          <div class="stat-value" id="stat-total-count">0</div>
+          <div class="stat-label">Automation Sequence Engine</div>
+          <div class="stat-value" id="stat-engine-status" style="font-size: 16px; color: #10b981;">▶️ Active (5m Sequence)</div>
         </div>
       </div>
 
-      <!-- Payments List Card -->
+      <!-- Appointments Card -->
       <div class="dashboard-card">
         <div class="card-header">
-          <div class="card-title">Payment History</div>
+          <div class="card-title">Valdho Form Appointments (firstoption_agency)</div>
           <div>
-            <button class="btn btn-secondary" id="btn-refresh-payments">
+            <button class="btn btn-secondary" id="btn-refresh-valdho">
               <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
               Refresh
             </button>
           </div>
         </div>
         
-        <!-- Payments Table -->
+        <!-- Appointments Table -->
         <div class="table-wrapper">
-          <table id="payments-table">
+          <table>
             <thead>
               <tr>
-                <th>Payment ID</th>
-                <th>Payer / Contact</th>
-                <th>Company Name</th>
-                <th>Amount</th>
+                <th>Lead / Contact</th>
+                <th>Phone Number</th>
+                <th>Form Selections / Answers</th>
                 <th>Status</th>
-                <th>Method</th>
-                <th>Transaction Date</th>
-                <th style="text-align: right;">Action</th>
+                <th>Next Message Countdown</th>
+                <th>Last Submission</th>
+                <th style="text-align: right;">Actions</th>
               </tr>
             </thead>
-            <tbody id="payments-body">
+            <tbody id="valdho-body">
               <tr>
-                <td colspan="8" class="empty-state">
+                <td colspan="7" class="empty-state">
                   <i data-lucide="loader" class="spin" style="width: 24px; height: 24px;"></i>
-                  <p>Loading payments data...</p>
+                  <p>Loading Valdho appointments...</p>
                 </td>
               </tr>
             </tbody>
@@ -107,31 +98,19 @@
   <div class="modal-backdrop" id="modal-backdrop">
     <div class="modal">
       <div class="modal-header">
-        <div class="modal-title" id="modal-title">Payment Details</div>
+        <div class="modal-title" id="modal-title">Valdho Lead Details</div>
         <button class="modal-close" id="modal-close">&times;</button>
       </div>
-      <div class="modal-body" id="modal-body">
+      <div class="modal-body">
         <div style="margin-bottom: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-          <div>
-            <strong>Payment ID:</strong> <span id="modal-pay-id">-</span>
-          </div>
-          <div>
-            <strong>Status:</strong> <span id="modal-pay-status">-</span>
-          </div>
-          <div>
-            <strong>Payer Email:</strong> <span id="modal-pay-email">-</span>
-          </div>
-          <div>
-            <strong>Payer Contact:</strong> <span id="modal-pay-phone">-</span>
-          </div>
-          <div>
-            <strong>Company Name:</strong> <span id="modal-pay-company">-</span>
-          </div>
-          <div>
-            <strong>Created At:</strong> <span id="modal-pay-date">-</span>
-          </div>
+          <div><strong>ID / Email:</strong> <span id="modal-pay-id">-</span></div>
+          <div><strong>Status:</strong> <span id="modal-pay-status">-</span></div>
+          <div><strong>Email:</strong> <span id="modal-pay-email">-</span></div>
+          <div><strong>Phone:</strong> <span id="modal-pay-phone">-</span></div>
+          <div><strong>Target Firebase Node:</strong> <span id="modal-pay-company">/firstoption_agency</span></div>
+          <div><strong>Submission Date:</strong> <span id="modal-pay-date">-</span></div>
         </div>
-        <strong>Raw Webhook Payload (JSON):</strong>
+        <strong>Full Webhook Payload (JSON):</strong>
         <pre><code id="modal-raw-payload">-</code></pre>
       </div>
       <div class="modal-footer">
@@ -140,52 +119,6 @@
     </div>
   </div>
 
-  <!-- ADD NEW INTEGRATION MODAL -->
-  <div class="modal-backdrop" id="modal-integration-backdrop">
-    <div class="modal" style="max-width: 600px;">
-      <div class="modal-header">
-        <div class="modal-title">Add New Integration</div>
-        <button class="modal-close" id="modal-integration-close">&times;</button>
-      </div>
-      <form id="form-add-integration">
-        <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label" for="integration-name">Name <span style="color: #ef4444;">*</span></label>
-            <input type="text" class="form-input" id="integration-name" value="valdho_first_option_agency" placeholder="Enter Integration name" required />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-url">WEBHOOK URL <span style="color: #ef4444;">*</span></label>
-            <input type="url" class="form-input" id="integration-url" value="https://raz.infiplus.in/valdho/webhook" placeholder="Enter your webhook endpoint URL (e.g., https://api.example.com/webhook)" required />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-method">HTTP METHOD <span style="color: #ef4444;">*</span></label>
-            <select class="form-select" id="integration-method" required>
-              <option value="POST" selected>POST</option>
-              <option value="GET">GET</option>
-              <option value="PUT">PUT</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-auth">AUTHORIZATION HEADER</label>
-            <input type="text" class="form-input" id="integration-auth" placeholder="Bearer token or API key (optional)" />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-headers">CUSTOM HEADERS</label>
-            <textarea class="form-input" id="integration-headers" rows="3" placeholder='Additional headers as JSON (optional) - e.g., {"X-API-Key": "value"}'></textarea>
-          </div>
-        </div>
-        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
-          <button type="button" class="btn btn-secondary" id="btn-cancel-integration">Cancel</button>
-          <button type="submit" class="btn" style="background-color: #1e1b4b; color: white;">Add New Integration</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <script src="app.js"></script>
+  <script src="app.js?v=4.0"></script>
 </body>
 </html>
