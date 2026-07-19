@@ -339,29 +339,29 @@
     </div>
   </div>
 
-  <!-- UNIFIED GLOBAL AUTOMATION WORKFLOW MODAL (PERSISTED IN FIREBASE /firstoption_agency_config/global_workflow) -->
-  <div class="modal-backdrop" id="modal-workflow-backdrop">
-    <div class="modal" style="max-width: 780px;">
-      <div class="modal-header">
-        <div class="modal-title" style="display: flex; align-items: center; gap: 8px;">
-          <i data-lucide="zap" style="width: 20px; height: 20px; color: #8b5cf6;"></i>
-          Global WhatsApp Automation Setup (Saved in Firebase)
+  <!-- UNIFIED GLOBAL AUTOMATION WORKFLOW RIGHT SLIDE-OVER DRAWER (PERSISTED IN FIREBASE /firstoption_agency_config/global_workflow) -->
+  <div class="drawer-backdrop" id="drawer-workflow-backdrop">
+    <div class="drawer">
+      <div class="drawer-header">
+        <div class="drawer-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="zap" style="width: 22px; height: 22px; color: #8b5cf6;"></i>
+          Global Automation Setup
         </div>
-        <button class="modal-close" id="modal-workflow-close">&times;</button>
+        <button class="drawer-close" id="drawer-workflow-close">&times;</button>
       </div>
-      <form id="form-global-workflow">
-        <div class="modal-body">
-          <div style="margin-bottom: 16px; background-color: #f3e8ff; border: 1px solid #d8b4fe; border-radius: 8px; padding: 12px; font-size: 13px; color: #6b21a8;">
+      <form id="form-global-workflow" style="display: flex; flex-direction: column; height: 100%;">
+        <div class="drawer-body">
+          <div style="margin-bottom: 20px; background-color: #f3e8ff; border: 1px solid #d8b4fe; border-radius: 10px; padding: 14px; font-size: 13px; color: #6b21a8; line-height: 1.5;">
             <strong>⚡ Continuous Global Automation Workflow:</strong><br/>
-            Configure the default sequence timing and message template for Step 1 (Half Form) and Step 2 (Full Form). When any lead submits form data, the engine automatically schedules follow-ups based on these settings. If a lead completes Step 2, any pending Step 1 Half Form reminders are <strong>AUTOMATICALLY CANCELLED & REMOVED</strong>.
+            Set your sequence rules and message templates once. When a lead submits Step 1 (Half Form), their reminder is auto-scheduled. If they complete Step 2 (Full Form), all Step 1 Half Form reminders are <strong>AUTOMATICALLY CANCELLED & REMOVED</strong>.
           </div>
 
           <!-- STEP 1: HALF FORM WORKFLOW -->
-          <div class="form-group" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <div class="form-group" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <strong style="font-size: 15px; color: #d97706;">Step 1: Half Form (Step 1 Only) Follow-up Rule</strong>
+              <strong style="font-size: 15px; color: #d97706;">Step 1: Half Form Follow-up Rule</strong>
               <label style="font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                <input type="checkbox" id="wf-half-enabled" checked /> Enable Automatic Follow-up
+                <input type="checkbox" id="wf-half-enabled" checked /> Enabled
               </label>
             </div>
 
@@ -377,20 +377,20 @@
             </div>
 
             <div>
-              <label class="form-label" for="wf-half-message">STEP 1 MESSAGE CONTENT TEMPLATE</label>
-              <textarea class="form-input" id="wf-half-message" rows="4" placeholder="Enter message text for Step 1 leads..." required></textarea>
-              <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+              <label class="form-label" for="wf-half-message">STEP 1 MESSAGE TEMPLATE</label>
+              <textarea class="form-input" id="wf-half-message" rows="5" placeholder="Enter message text for Step 1 leads..." required></textarea>
+              <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">
                 Placeholders: <code>{name}</code>, <code>{phone}</code>, <code>{email}</code>
               </div>
             </div>
           </div>
 
           <!-- STEP 2: FULL FORM WORKFLOW -->
-          <div class="form-group" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+          <div class="form-group" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <strong style="font-size: 15px; color: #059669;">Step 2: Full Form (Step 2 Completed) Confirmation Rule</strong>
+              <strong style="font-size: 15px; color: #059669;">Step 2: Full Form Confirmation Rule</strong>
               <label style="font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                <input type="checkbox" id="wf-full-enabled" checked /> Enable Automatic Confirmation
+                <input type="checkbox" id="wf-full-enabled" checked /> Enabled
               </label>
             </div>
 
@@ -405,15 +405,15 @@
             </div>
 
             <div>
-              <label class="form-label" for="wf-full-message">STEP 2 MESSAGE CONTENT TEMPLATE</label>
-              <textarea class="form-input" id="wf-full-message" rows="4" placeholder="Enter message text for Step 2 completed leads..." required></textarea>
-              <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+              <label class="form-label" for="wf-full-message">STEP 2 MESSAGE TEMPLATE</label>
+              <textarea class="form-input" id="wf-full-message" rows="5" placeholder="Enter message text for Step 2 completed leads..." required></textarea>
+              <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">
                 Placeholders: <code>{name}</code>, <code>{phone}</code>, <code>{email}</code>, <code>{answers}</code>
               </div>
             </div>
           </div>
         </div>
-        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
+        <div class="drawer-footer">
           <button type="button" class="btn btn-secondary" id="btn-cancel-workflow">Cancel</button>
           <button type="submit" class="btn" style="background-color: #8b5cf6; color: white;">
             <i data-lucide="save" style="width: 16px; height: 16px;"></i>

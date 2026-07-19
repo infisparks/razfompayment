@@ -527,15 +527,15 @@ function closeQueueModal() {
   document.getElementById('modal-queue-backdrop').classList.remove('active');
   if (countdownTimerInterval) clearInterval(countdownTimerInterval);
 }
-function closeWorkflowModal() {
-  const modal = document.getElementById('modal-workflow-backdrop');
-  if (modal) modal.classList.remove('active');
+function closeWorkflowDrawer() {
+  const backdrop = document.getElementById('drawer-workflow-backdrop');
+  if (backdrop) backdrop.classList.remove('active');
 }
 
-window.openWorkflowModal = function() {
-  const modal = document.getElementById('modal-workflow-backdrop');
-  if (modal) {
-    modal.classList.add('active');
+window.openWorkflowDrawer = function() {
+  const backdrop = document.getElementById('drawer-workflow-backdrop');
+  if (backdrop) {
+    backdrop.classList.add('active');
   }
   fetchGlobalWorkflow();
 };
@@ -581,12 +581,9 @@ document.addEventListener('DOMContentLoaded', () => {
   safeAddListener('modal-logs-close', 'click', closeLogsModal);
   safeAddListener('btn-close-logs', 'click', closeLogsModal);
 
-  safeAddListener('btn-open-workflow-modal', 'click', () => {
-    fetchGlobalWorkflow();
-    document.getElementById('modal-workflow-backdrop').classList.add('active');
-  });
-  safeAddListener('modal-workflow-close', 'click', closeWorkflowModal);
-  safeAddListener('btn-cancel-workflow', 'click', closeWorkflowModal);
+  safeAddListener('btn-open-workflow-modal', 'click', openWorkflowDrawer);
+  safeAddListener('drawer-workflow-close', 'click', closeWorkflowDrawer);
+  safeAddListener('btn-cancel-workflow', 'click', closeWorkflowDrawer);
 
   safeAddListener('modal-edit-sched-close', 'click', closeEditSchedModal);
   safeAddListener('btn-cancel-edit-sched', 'click', closeEditSchedModal);
@@ -622,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (res.ok) {
           alert('Global Automation Workflow successfully saved to Firebase!');
-          closeWorkflowModal();
+          closeWorkflowDrawer();
         } else {
           alert('Failed to save global workflow.');
         }
