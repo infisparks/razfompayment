@@ -132,16 +132,13 @@ async function scheduleMessage({ email, phone, lead_name, form_type, message_tex
   });
 }
 
-const DEFAULT_AUTO_RULES = {
+const DEFAULT_GLOBAL_WORKFLOW = {
   half_enabled: true,
   half_interval: '5d',
+  half_message: `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`,
   full_enabled: true,
-  full_interval: '1m'
-};
-
-const DEFAULT_TEMPLATES = {
-  half_template: `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`,
-  full_template: `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`
+  full_interval: '1m',
+  full_message: `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`
 };
 
 /**
@@ -154,33 +151,27 @@ async function autoScheduleLead(lead, formType) {
   const phone = lead.phone || 'N/A';
   const name = lead.name || 'Valdho Lead';
 
-  // 1. Fetch Auto Rules from Firebase
-  let rules = DEFAULT_AUTO_RULES;
+  // Fetch Global Workflow Configuration from Firebase
+  let workflow = DEFAULT_GLOBAL_WORKFLOW;
   try {
-    const savedRules = await firebase.getConfig('auto_rules');
-    if (savedRules) rules = { ...DEFAULT_AUTO_RULES, ...savedRules };
+    const savedWorkflow = await firebase.getConfig('global_workflow');
+    if (savedWorkflow) workflow = { ...DEFAULT_GLOBAL_WORKFLOW, ...savedWorkflow };
   } catch (e) {}
 
-  // 2. Fetch Templates from Firebase
-  let templates = DEFAULT_TEMPLATES;
-  try {
-    const savedTemplates = await firebase.getConfig('templates');
-    if (savedTemplates) templates = { ...DEFAULT_TEMPLATES, ...savedTemplates };
-  } catch (e) {}
-
-  // 3. If Step 2 (Full Form) is received, CANCEL all pending Half Form messages immediately!
+  // If Step 2 (Full Form) is received, CANCEL all pending Half Form messages immediately!
   if (formType === 'full_form' || lead.status === 'completed') {
-    console.log(`[Auto Scheduler] Lead ${email} completed Step 2. Canceling all pending Half Form scheduled messages!`);
+    console.log(`[Global Workflow] Lead ${email} completed Step 2. Canceling all pending Half Form scheduled messages!`);
     await cancelSchedulesForEmail(email);
 
-    if (rules.full_enabled) {
+    if (workflow.full_enabled) {
       const choices = [];
       const allData = typeof lead.all_form_data === 'string' ? JSON.parse(lead.all_form_data) : (lead.all_form_data || {});
       Object.keys(allData).forEach(k => { if (Array.isArray(allData[k])) choices.push(...allData[k]); });
       
-      const msgText = templates.full_template.replace(/\{name\}/g, name).replace(/\{answers\}/g, choices.join(', ') || 'Step 2 Completed');
+      const rawMsg = workflow.full_message || DEFAULT_GLOBAL_WORKFLOW.full_message;
+      const msgText = rawMsg.replace(/\{name\}/g, name).replace(/\{answers\}/g, choices.join(', ') || 'Step 2 Completed');
 
-      if (rules.full_interval === 'now') {
+      if (workflow.full_interval === 'now') {
         whatsapp.sendEvolutionWhatsApp(phone, msgText).catch(e => console.error(e));
       } else {
         await scheduleMessage({
@@ -189,23 +180,24 @@ async function autoScheduleLead(lead, formType) {
           lead_name: name,
           form_type: 'full_form',
           message_text: msgText,
-          interval: rules.full_interval || '1m'
+          interval: workflow.full_interval || '1m'
         });
       }
     }
     return;
   }
 
-  // 4. If Step 1 (Half Form) is received
-  if (formType === 'half_form' && rules.half_enabled) {
-    const msgText = templates.half_template.replace(/\{name\}/g, name);
+  // If Step 1 (Half Form) is received
+  if (formType === 'half_form' && workflow.half_enabled) {
+    const rawMsg = workflow.half_message || DEFAULT_GLOBAL_WORKFLOW.half_message;
+    const msgText = rawMsg.replace(/\{name\}/g, name);
     await scheduleMessage({
       email,
       phone,
       lead_name: name,
       form_type: 'half_form',
       message_text: msgText,
-      interval: rules.half_interval || '5d'
+      interval: workflow.half_interval || '5d'
     });
   }
 }

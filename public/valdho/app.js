@@ -146,10 +146,6 @@ function renderValdhoTable() {
         <td data-label="Status">${statusBadge}</td>
         <td data-label="Last Submission">${updatedDate}</td>
         <td data-label="Actions" style="text-align: right; white-space: nowrap;">
-          <button class="btn" onclick="openWhatsAppModal('${email}')" style="background-color: #25d366; color: white; padding: 6px 12px; font-size: 13px; margin-right: 4px;">
-            <i data-lucide="message-square" style="width: 14px; height: 14px;"></i>
-            WhatsApp
-          </button>
           <button class="btn btn-secondary" onclick="openValdhoDetails('${email}')" style="padding: 6px 12px; font-size: 13px; margin-right: 4px;">
             Inspect
           </button>
@@ -531,21 +527,20 @@ function closeQueueModal() {
   document.getElementById('modal-queue-backdrop').classList.remove('active');
   if (countdownTimerInterval) clearInterval(countdownTimerInterval);
 }
-function closeLogsModal() { document.getElementById('modal-logs-backdrop').classList.remove('active'); }
-function closeTemplatesModal() { document.getElementById('modal-templates-backdrop').classList.remove('active'); }
-function closeRulesModal() { document.getElementById('modal-rules-backdrop').classList.remove('active'); }
-function closeEditSchedModal() { document.getElementById('modal-edit-sched-backdrop').classList.remove('active'); }
-function closeIntegrationModal() { document.getElementById('modal-integration-backdrop').classList.remove('active'); }
+function closeWorkflowModal() { document.getElementById('modal-workflow-backdrop').classList.remove('active'); }
 
-async function fetchAutoRules() {
+async function fetchGlobalWorkflow() {
   try {
-    const res = await fetch('/api/valdho/auto-rules');
+    const res = await fetch('/api/valdho/global-workflow');
     if (res.ok) {
-      const rules = await res.json();
-      document.getElementById('rule-half-enabled').checked = rules.half_enabled !== false;
-      document.getElementById('rule-half-interval').value = rules.half_interval || '5d';
-      document.getElementById('rule-full-enabled').checked = rules.full_enabled !== false;
-      document.getElementById('rule-full-interval').value = rules.full_interval || '1m';
+      const wf = await res.json();
+      document.getElementById('wf-half-enabled').checked = wf.half_enabled !== false;
+      document.getElementById('wf-half-interval').value = wf.half_interval || '5d';
+      document.getElementById('wf-half-message').value = wf.half_message || '';
+
+      document.getElementById('wf-full-enabled').checked = wf.full_enabled !== false;
+      document.getElementById('wf-full-interval').value = wf.full_interval || '1m';
+      document.getElementById('wf-full-message').value = wf.full_message || '';
     }
   } catch (e) {}
 }
@@ -554,9 +549,6 @@ async function fetchAutoRules() {
 document.addEventListener('DOMContentLoaded', () => {
   safeAddListener('modal-close', 'click', closeModal);
   safeAddListener('modal-btn-close', 'click', closeModal);
-
-  safeAddListener('modal-whatsapp-close', 'click', closeWhatsAppModal);
-  safeAddListener('btn-cancel-whatsapp', 'click', closeWhatsAppModal);
 
   safeAddListener('btn-open-scheduled-modal', 'click', () => {
     document.getElementById('modal-queue-backdrop').classList.add('active');
@@ -572,20 +564,12 @@ document.addEventListener('DOMContentLoaded', () => {
   safeAddListener('modal-logs-close', 'click', closeLogsModal);
   safeAddListener('btn-close-logs', 'click', closeLogsModal);
 
-  safeAddListener('btn-open-templates-modal', 'click', () => {
-    document.getElementById('tmpl-half-text').value = currentTemplates.half_template;
-    document.getElementById('tmpl-full-text').value = currentTemplates.full_template;
-    document.getElementById('modal-templates-backdrop').classList.add('active');
+  safeAddListener('btn-open-workflow-modal', 'click', () => {
+    fetchGlobalWorkflow();
+    document.getElementById('modal-workflow-backdrop').classList.add('active');
   });
-  safeAddListener('modal-templates-close', 'click', closeTemplatesModal);
-  safeAddListener('btn-cancel-templates', 'click', closeTemplatesModal);
-
-  safeAddListener('btn-open-rules-modal', 'click', () => {
-    fetchAutoRules();
-    document.getElementById('modal-rules-backdrop').classList.add('active');
-  });
-  safeAddListener('modal-rules-close', 'click', closeRulesModal);
-  safeAddListener('btn-cancel-rules', 'click', closeRulesModal);
+  safeAddListener('modal-workflow-close', 'click', closeWorkflowModal);
+  safeAddListener('btn-cancel-workflow', 'click', closeWorkflowModal);
 
   safeAddListener('modal-edit-sched-close', 'click', closeEditSchedModal);
   safeAddListener('btn-cancel-edit-sched', 'click', closeEditSchedModal);
@@ -593,30 +577,40 @@ document.addEventListener('DOMContentLoaded', () => {
   safeAddListener('btn-toggle-automation', 'click', toggleAutomationEngine);
   safeAddListener('btn-refresh-valdho', 'click', fetchValdhoAppointments);
 
-  // Auto Rules Form Submit
-  const formAutoRules = document.getElementById('form-auto-rules');
-  if (formAutoRules) {
-    formAutoRules.addEventListener('submit', async (e) => {
+  // Global Workflow Form Submit
+  const formWorkflow = document.getElementById('form-global-workflow');
+  if (formWorkflow) {
+    formWorkflow.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const half_enabled = document.getElementById('rule-half-enabled').checked;
-      const half_interval = document.getElementById('rule-half-interval').value;
-      const full_enabled = document.getElementById('rule-full-enabled').checked;
-      const full_interval = document.getElementById('rule-full-interval').value;
+      const half_enabled = document.getElementById('wf-half-enabled').checked;
+      const half_interval = document.getElementById('wf-half-interval').value;
+      const half_message = document.getElementById('wf-half-message').value;
+
+      const full_enabled = document.getElementById('wf-full-enabled').checked;
+      const full_interval = document.getElementById('wf-full-interval').value;
+      const full_message = document.getElementById('wf-full-message').value;
 
       try {
-        const res = await fetch('/api/valdho/auto-rules', {
+        const res = await fetch('/api/valdho/global-workflow', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ half_enabled, half_interval, full_enabled, full_interval })
+          body: JSON.stringify({
+            half_enabled,
+            half_interval,
+            half_message,
+            full_enabled,
+            full_interval,
+            full_message
+          })
         });
         if (res.ok) {
-          alert('Automatic Sequence Rules saved to Firebase successfully!');
-          closeRulesModal();
+          alert('Global Automation Workflow successfully saved to Firebase!');
+          closeWorkflowModal();
         } else {
-          alert('Failed to save rules.');
+          alert('Failed to save global workflow.');
         }
       } catch (err) {
-        alert(`Error saving rules: ${err.message}`);
+        alert(`Error saving global workflow: ${err.message}`);
       }
     });
   }

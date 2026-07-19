@@ -139,34 +139,38 @@ router.post('/webhook', webhookHandler);
 router.post('/api/valdho/webhook', webhookHandler);
 
 // -------------------------------------------------------------
-// AUTO-SCHEDULER RULES API (/firstoption_agency_config/auto_rules)
+// GLOBAL WORKFLOW API (/firstoption_agency_config/global_workflow)
 // -------------------------------------------------------------
-const DEFAULT_AUTO_RULES = {
+const DEFAULT_GLOBAL_WORKFLOW = {
   half_enabled: true,
   half_interval: '5d',
+  half_message: `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`,
   full_enabled: true,
-  full_interval: '1m'
+  full_interval: '1m',
+  full_message: `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`
 };
 
-router.get('/api/valdho/auto-rules', async (req, res) => {
+router.get('/api/valdho/global-workflow', async (req, res) => {
   try {
-    const saved = await firebase.getConfig('auto_rules');
-    res.json(saved ? { ...DEFAULT_AUTO_RULES, ...saved } : DEFAULT_AUTO_RULES);
+    const saved = await firebase.getConfig('global_workflow');
+    res.json(saved ? { ...DEFAULT_GLOBAL_WORKFLOW, ...saved } : DEFAULT_GLOBAL_WORKFLOW);
   } catch (err) {
-    res.json(DEFAULT_AUTO_RULES);
+    res.json(DEFAULT_GLOBAL_WORKFLOW);
   }
 });
 
-router.post('/api/valdho/auto-rules', async (req, res) => {
+router.post('/api/valdho/global-workflow', async (req, res) => {
   try {
-    const { half_enabled, half_interval, full_enabled, full_interval } = req.body;
+    const { half_enabled, half_interval, half_message, full_enabled, full_interval, full_message } = req.body;
     const payload = {
       half_enabled: half_enabled !== false,
       half_interval: half_interval || '5d',
+      half_message: half_message || DEFAULT_GLOBAL_WORKFLOW.half_message,
       full_enabled: full_enabled !== false,
-      full_interval: full_interval || '1m'
+      full_interval: full_interval || '1m',
+      full_message: full_message || DEFAULT_GLOBAL_WORKFLOW.full_message
     };
-    await firebase.saveConfig('auto_rules', payload);
+    await firebase.saveConfig('global_workflow', payload);
     res.json({ status: 'ok', data: payload });
   } catch (err) {
     res.status(500).json({ error: err.message });
