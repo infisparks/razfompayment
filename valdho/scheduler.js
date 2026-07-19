@@ -76,7 +76,9 @@ async function syncStateFromFirebase() {
 async function scheduleMessage({ email, phone, lead_name, form_type, message_text, interval, scheduled_at }) {
   let targetDate = new Date();
 
-  if (interval === '1m') {
+  if (interval === '5m' || interval === '5minutes') {
+    targetDate.setMinutes(targetDate.getMinutes() + 5);
+  } else if (interval === '1m') {
     targetDate.setMinutes(targetDate.getMinutes() + 1);
   } else if (interval === '1h') {
     targetDate.setHours(targetDate.getHours() + 1);
@@ -136,17 +138,12 @@ async function scheduleMessage({ email, phone, lead_name, form_type, message_tex
   });
 }
 
-const DEFAULT_GLOBAL_WORKFLOW = {
-  half_enabled: true,
-  half_interval: '5d',
-  half_message: `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`,
-  full_enabled: true,
-  full_interval: '1m',
-  full_message: `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`
-};
+const HARDCODED_HALF_FORM_TEMPLATE = `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`;
+
+const HARDCODED_FULL_FORM_TEMPLATE = `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`;
 
 /**
- * Automatically schedule follow-up message when a webhook is received
+ * Automatically schedule follow-up message when a webhook is received (Hardcoded 5m Interval)
  */
 async function autoScheduleLead(lead, formType) {
   if (!lead || !lead.email) return;
@@ -155,53 +152,38 @@ async function autoScheduleLead(lead, formType) {
   const phone = lead.phone || 'N/A';
   const name = lead.name || 'Valdho Lead';
 
-  // Fetch Global Workflow Configuration from Firebase
-  let workflow = DEFAULT_GLOBAL_WORKFLOW;
-  try {
-    const savedWorkflow = await firebase.getConfig('global_workflow');
-    if (savedWorkflow) workflow = { ...DEFAULT_GLOBAL_WORKFLOW, ...savedWorkflow };
-  } catch (e) {}
-
   // If Step 2 (Full Form) is received, CANCEL all pending Half Form messages immediately!
   if (formType === 'full_form' || lead.status === 'completed') {
-    console.log(`[Global Workflow] Lead ${email} completed Step 2. Canceling all pending Half Form scheduled messages!`);
+    console.log(`[Auto Scheduler] Lead ${email} completed Step 2 (Full Form). Canceling all pending Step 1 Half Form reminders!`);
     await cancelSchedulesForEmail(email);
 
-    if (workflow.full_enabled) {
-      const choices = [];
-      const allData = typeof lead.all_form_data === 'string' ? JSON.parse(lead.all_form_data) : (lead.all_form_data || {});
-      Object.keys(allData).forEach(k => { if (Array.isArray(allData[k])) choices.push(...allData[k]); });
-      
-      const rawMsg = workflow.full_message || DEFAULT_GLOBAL_WORKFLOW.full_message;
-      const msgText = rawMsg.replace(/\{name\}/g, name).replace(/\{answers\}/g, choices.join(', ') || 'Step 2 Completed');
+    const choices = [];
+    const allData = typeof lead.all_form_data === 'string' ? JSON.parse(lead.all_form_data) : (lead.all_form_data || {});
+    Object.keys(allData).forEach(k => { if (Array.isArray(allData[k])) choices.push(...allData[k]); });
+    
+    const msgText = HARDCODED_FULL_FORM_TEMPLATE.replace(/\{name\}/g, name).replace(/\{answers\}/g, choices.join(', ') || 'Step 2 Completed');
 
-      if (workflow.full_interval === 'now') {
-        whatsapp.sendEvolutionWhatsApp(phone, msgText).catch(e => console.error(e));
-      } else {
-        await scheduleMessage({
-          email,
-          phone,
-          lead_name: name,
-          form_type: 'full_form',
-          message_text: msgText,
-          interval: workflow.full_interval || '1m'
-        });
-      }
-    }
+    await scheduleMessage({
+      email,
+      phone,
+      lead_name: name,
+      form_type: 'full_form',
+      message_text: msgText,
+      interval: '5m'
+    });
     return;
   }
 
   // If Step 1 (Half Form) is received
-  if (formType === 'half_form' && workflow.half_enabled) {
-    const rawMsg = workflow.half_message || DEFAULT_GLOBAL_WORKFLOW.half_message;
-    const msgText = rawMsg.replace(/\{name\}/g, name);
+  if (formType === 'half_form') {
+    const msgText = HARDCODED_HALF_FORM_TEMPLATE.replace(/\{name\}/g, name);
     await scheduleMessage({
       email,
       phone,
       lead_name: name,
       form_type: 'half_form',
       message_text: msgText,
-      interval: workflow.half_interval || '5d'
+      interval: '5m'
     });
   }
 }
