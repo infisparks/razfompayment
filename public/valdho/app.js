@@ -5,15 +5,33 @@ let scheduledQueue = [];
 let dispatchLogs = [];
 let isAutomationPaused = false;
 
+// Default Template fallback
+let currentTemplates = {
+  half_template: `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`,
+  full_template: `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`
+};
+
 function safeAddListener(id, event, handler) {
   const el = document.getElementById(id);
   if (el) el.addEventListener(event, handler);
 }
 
-const TEMPLATES = {
-  half: (name) => `*Dear ${name || 'Valdho Lead'},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`,
-  full: (name, answers) => `*Dear ${name || 'Valdho Lead'},*\n\nYour appointment registration has been successfully received!\n\n*Details:* ${answers || 'Step 2 Completed'}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`
-};
+// -------------------------------------------------------------
+// TEMPLATES (PERSISTED IN FIREBASE /firstoption_agency_config/templates)
+// -------------------------------------------------------------
+async function fetchTemplates() {
+  try {
+    const res = await fetch('/api/valdho/templates');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && (data.half_template || data.full_template)) {
+        currentTemplates = { ...currentTemplates, ...data };
+      }
+    }
+  } catch (e) {
+    console.warn('Error loading templates:', e);
+  }
+}
 
 // -------------------------------------------------------------
 // APPOINTMENTS
@@ -27,7 +45,8 @@ async function fetchValdhoAppointments() {
     const res = await fetch('/api/valdho/appointments');
     if (!res.ok) throw new Error('Failed to fetch Valdho appointments');
 
-    valdhoAppointments = await res.json();
+    const data = await res.json();
+    valdhoAppointments = Array.isArray(data) ? data : [];
 
     if (statusDot) {
       statusDot.style.backgroundColor = '#10b981';
@@ -239,16 +258,20 @@ function updateAutomationUI() {
 }
 
 // -------------------------------------------------------------
-// SCHEDULED QUEUE & LOGS MODALS
+// SCHEDULED QUEUE MODAL
 // -------------------------------------------------------------
 async function fetchScheduledQueue() {
   const queueBody = document.getElementById('queue-body');
   try {
     const res = await fetch('/api/valdho/whatsapp/schedules');
-    scheduledQueue = await res.json();
+    if (!res.ok) throw new Error('Failed to fetch schedules');
+
+    const data = await res.json();
+    scheduledQueue = Array.isArray(data) ? data : (typeof data === 'object' && data !== null ? Object.values(data) : []);
     renderQueueTable();
   } catch (e) {
-    if (queueBody) queueBody.innerHTML = `<tr><td colspan="6" class="empty-state">Error loading scheduled queue.</td></tr>`;
+    console.error('Error fetching scheduled queue:', e);
+    if (queueBody) queueBody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color: #ef4444;">Failed to load scheduled queue.</td></tr>`;
   }
 }
 
@@ -276,7 +299,10 @@ function renderQueueTable() {
         <td data-label="Form Type"><span class="choice-pill">${item.form_type}</span></td>
         <td data-label="Target Scheduled Date">${schedDate}</td>
         <td data-label="Status">${statusBadge}</td>
-        <td data-label="Action" style="text-align: right;">
+        <td data-label="Action" style="text-align: right; white-space: nowrap;">
+          <button class="btn btn-secondary" onclick="openEditScheduleModal(${item.id})" style="padding: 4px 8px; font-size: 12px; margin-right: 4px;">
+            <i data-lucide="edit-3" style="width: 12px; height: 12px;"></i> Edit
+          </button>
           <button class="btn btn-danger" onclick="deleteSchedule(${item.id})" style="padding: 4px 8px; font-size: 12px;">
             Cancel
           </button>
@@ -284,6 +310,8 @@ function renderQueueTable() {
       </tr>
     `;
   }).join('');
+
+  if (window.lucide) lucide.createIcons();
 }
 
 window.deleteSchedule = async function(id) {
@@ -294,14 +322,35 @@ window.deleteSchedule = async function(id) {
   } catch (err) {}
 };
 
+window.openEditScheduleModal = function(id) {
+  const item = scheduledQueue.find(s => String(s.id) === String(id));
+  if (!item) return;
+
+  document.getElementById('edit-sched-id').value = item.id;
+  document.getElementById('edit-sched-lead').value = `${item.lead_name || 'Lead'} (${item.phone})`;
+  document.getElementById('edit-sched-text').value = item.message_text || '';
+
+  if (item.scheduled_at) {
+    const d = new Date(item.scheduled_at);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    document.getElementById('edit-sched-date').value = d.toISOString().slice(0, 16);
+  }
+
+  document.getElementById('modal-edit-sched-backdrop').classList.add('active');
+};
+
+// -------------------------------------------------------------
+// MESSAGE DISPATCH LOGS MODAL
+// -------------------------------------------------------------
 async function fetchDispatchLogs() {
   const logsBody = document.getElementById('logs-body');
   try {
     const res = await fetch('/api/valdho/whatsapp/logs');
-    dispatchLogs = await res.json();
+    const data = await res.json();
+    dispatchLogs = Array.isArray(data) ? data : (typeof data === 'object' && data !== null ? Object.values(data) : []);
     renderLogsTable();
   } catch (e) {
-    if (logsBody) logsBody.innerHTML = `<tr><td colspan="5" class="empty-state">Error loading logs.</td></tr>`;
+    if (logsBody) logsBody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: #ef4444;">Error loading logs.</td></tr>`;
   }
 }
 
@@ -366,8 +415,11 @@ window.openWhatsAppModal = function(email) {
   const choicesSummary = choices.join(', ');
 
   const messageInput = document.getElementById('wa-message-text');
-  if (isCompleted) messageInput.value = TEMPLATES.full(name, choicesSummary);
-  else messageInput.value = TEMPLATES.half(name);
+  if (isCompleted) {
+    messageInput.value = currentTemplates.full_template.replace(/\{name\}/g, name).replace(/\{answers\}/g, choicesSummary || 'Step 2 Completed');
+  } else {
+    messageInput.value = currentTemplates.half_template.replace(/\{name\}/g, name);
+  }
 
   document.getElementById('modal-whatsapp-backdrop').classList.add('active');
 };
@@ -395,6 +447,8 @@ function closeModal() { document.getElementById('modal-backdrop').classList.remo
 function closeWhatsAppModal() { document.getElementById('modal-whatsapp-backdrop').classList.remove('active'); }
 function closeQueueModal() { document.getElementById('modal-queue-backdrop').classList.remove('active'); }
 function closeLogsModal() { document.getElementById('modal-logs-backdrop').classList.remove('active'); }
+function closeTemplatesModal() { document.getElementById('modal-templates-backdrop').classList.remove('active'); }
+function closeEditSchedModal() { document.getElementById('modal-edit-sched-backdrop').classList.remove('active'); }
 function closeIntegrationModal() { document.getElementById('modal-integration-backdrop').classList.remove('active'); }
 
 // DOM Initialization
@@ -419,16 +473,86 @@ document.addEventListener('DOMContentLoaded', () => {
   safeAddListener('modal-logs-close', 'click', closeLogsModal);
   safeAddListener('btn-close-logs', 'click', closeLogsModal);
 
+  safeAddListener('btn-open-templates-modal', 'click', () => {
+    document.getElementById('tmpl-half-text').value = currentTemplates.half_template;
+    document.getElementById('tmpl-full-text').value = currentTemplates.full_template;
+    document.getElementById('modal-templates-backdrop').classList.add('active');
+  });
+  safeAddListener('modal-templates-close', 'click', closeTemplatesModal);
+  safeAddListener('btn-cancel-templates', 'click', closeTemplatesModal);
+
+  safeAddListener('modal-edit-sched-close', 'click', closeEditSchedModal);
+  safeAddListener('btn-cancel-edit-sched', 'click', closeEditSchedModal);
+
   safeAddListener('btn-toggle-automation', 'click', toggleAutomationEngine);
   safeAddListener('btn-refresh-valdho', 'click', fetchValdhoAppointments);
 
   safeAddListener('btn-tmpl-half', 'click', () => {
-    if (selectedLeadForWa) document.getElementById('wa-message-text').value = TEMPLATES.half(selectedLeadForWa.name);
+    if (selectedLeadForWa) {
+      document.getElementById('wa-message-text').value = currentTemplates.half_template.replace(/\{name\}/g, selectedLeadForWa.name);
+    }
   });
 
   safeAddListener('btn-tmpl-full', 'click', () => {
-    if (selectedLeadForWa) document.getElementById('wa-message-text').value = TEMPLATES.full(selectedLeadForWa.name, 'Step 2 Completed');
+    if (selectedLeadForWa) {
+      document.getElementById('wa-message-text').value = currentTemplates.full_template.replace(/\{name\}/g, selectedLeadForWa.name).replace(/\{answers\}/g, 'Step 2 Completed');
+    }
   });
+
+  // Save Templates Form Submission
+  const formTemplates = document.getElementById('form-templates');
+  if (formTemplates) {
+    formTemplates.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const half_template = document.getElementById('tmpl-half-text').value;
+      const full_template = document.getElementById('tmpl-full-text').value;
+
+      try {
+        const res = await fetch('/api/valdho/templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ half_template, full_template })
+        });
+        if (res.ok) {
+          currentTemplates = { half_template, full_template };
+          alert('WhatsApp message templates successfully saved to Firebase!');
+          closeTemplatesModal();
+        } else {
+          alert('Failed to save templates.');
+        }
+      } catch (err) {
+        alert(`Error saving templates: ${err.message}`);
+      }
+    });
+  }
+
+  // Edit Schedule Form Submission
+  const formEditSched = document.getElementById('form-edit-sched');
+  if (formEditSched) {
+    formEditSched.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('edit-sched-id').value;
+      const message_text = document.getElementById('edit-sched-text').value;
+      const scheduled_at = document.getElementById('edit-sched-date').value;
+
+      try {
+        const res = await fetch('/api/valdho/whatsapp/schedules/' + id, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message_text, scheduled_at })
+        });
+        if (res.ok) {
+          alert(`Scheduled message #${id} updated successfully!`);
+          closeEditSchedModal();
+          fetchScheduledQueue();
+        } else {
+          alert('Failed to update schedule.');
+        }
+      } catch (err) {
+        alert(`Error updating schedule: ${err.message}`);
+      }
+    });
+  }
 
   const modeSelect = document.getElementById('wa-schedule-mode');
   if (modeSelect) {
@@ -501,9 +625,11 @@ document.addEventListener('DOMContentLoaded', () => {
   safeAddListener('modal-integration-close', 'click', closeIntegrationModal);
   safeAddListener('btn-cancel-integration', 'click', closeIntegrationModal);
 
+  fetchTemplates();
   fetchValdhoAppointments();
 });
 
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  fetchTemplates();
   fetchValdhoAppointments();
 }

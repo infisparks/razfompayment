@@ -23,6 +23,11 @@
           <span id="text-toggle-automation">Pause Automation</span>
         </button>
 
+        <button class="btn" id="btn-open-templates-modal" style="background-color: #8b5cf6; color: white;">
+          <i data-lucide="settings" style="width: 16px; height: 16px;"></i>
+          Edit Templates
+        </button>
+
         <button class="btn" id="btn-open-scheduled-modal" style="background-color: #059669; color: white;">
           <i data-lucide="clock" style="width: 16px; height: 16px;"></i>
           Scheduled Queue
@@ -328,6 +333,83 @@
         <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
           <button type="button" class="btn btn-secondary" id="btn-cancel-integration">Cancel</button>
           <button type="submit" class="btn" style="background-color: #1e1b4b; color: white;">Add New Integration</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- EDIT MESSAGE TEMPLATES MODAL (SAVED IN FIREBASE /firstoption_agency_config/templates) -->
+  <div class="modal-backdrop" id="modal-templates-backdrop">
+    <div class="modal" style="max-width: 700px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="settings" style="width: 20px; height: 20px; color: #8b5cf6;"></i>
+          Edit WhatsApp Message Templates (Persisted in Firebase)
+        </div>
+        <button class="modal-close" id="modal-templates-close">&times;</button>
+      </div>
+      <form id="form-templates">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="tmpl-half-text">HALF FORM REMINDER TEMPLATE (STEP 1 ONLY)</label>
+            <textarea class="form-input" id="tmpl-half-text" rows="5" placeholder="Default message for Step 1 leads..." required></textarea>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+              Placeholders: <code>{name}</code>, <code>{phone}</code>, <code>{email}</code>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="tmpl-full-text">FULL FORM CONFIRMATION TEMPLATE (STEP 2 COMPLETED)</label>
+            <textarea class="form-input" id="tmpl-full-text" rows="5" placeholder="Default message for Step 2 completed leads..." required></textarea>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+              Placeholders: <code>{name}</code>, <code>{phone}</code>, <code>{email}</code>, <code>{answers}</code>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-templates">Cancel</button>
+          <button type="submit" class="btn" style="background-color: #8b5cf6; color: white;">
+            <i data-lucide="save" style="width: 16px; height: 16px;"></i>
+            Save Templates to Firebase
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- EDIT SCHEDULED ITEM MODAL -->
+  <div class="modal-backdrop" id="modal-edit-sched-backdrop">
+    <div class="modal" style="max-width: 600px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="edit-3" style="width: 20px; height: 20px; color: #3b82f6;"></i>
+          Edit Scheduled WhatsApp Message
+        </div>
+        <button class="modal-close" id="modal-edit-sched-close">&times;</button>
+      </div>
+      <form id="form-edit-sched">
+        <input type="hidden" id="edit-sched-id" />
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">LEAD RECIPIENT</label>
+            <input type="text" class="form-input" id="edit-sched-lead" readonly style="background-color: #f1f5f9;" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-sched-text">MESSAGE CONTENT</label>
+            <textarea class="form-input" id="edit-sched-text" rows="5" required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="edit-sched-date">TARGET SCHEDULED DATE & TIME</label>
+            <input type="datetime-local" class="form-input" id="edit-sched-date" required />
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-edit-sched">Cancel</button>
+          <button type="submit" class="btn" style="background-color: #3b82f6; color: white;">
+            Save Changes
+          </button>
         </div>
       </form>
     </div>

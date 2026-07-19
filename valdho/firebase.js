@@ -84,12 +84,13 @@ async function getAppointments() {
     try {
       const snapshot = await adminApp.database().ref(nodePath).once('value');
       const val = snapshot.val();
-      return val ? Object.values(val) : [];
+      return val ? (Array.isArray(val) ? val : Object.values(val)) : [];
     } catch (err) {}
   }
   try {
     const response = await axios.get(`${databaseUrl}/${nodePath}.json`);
-    return response.data ? Object.values(response.data) : [];
+    const data = response.data;
+    return data ? (Array.isArray(data) ? data : Object.values(data)) : [];
   } catch (err) {
     return [];
   }
@@ -142,12 +143,13 @@ async function getSchedules() {
     try {
       const snapshot = await adminApp.database().ref(nodePath).once('value');
       const val = snapshot.val();
-      return val ? Object.values(val) : [];
+      return val ? (Array.isArray(val) ? val : Object.values(val)) : [];
     } catch (err) {}
   }
   try {
     const response = await axios.get(`${databaseUrl}/${nodePath}.json`);
-    return response.data ? Object.values(response.data) : [];
+    const data = response.data;
+    return data ? (Array.isArray(data) ? data : Object.values(data)) : [];
   } catch (err) {
     return [];
   }
@@ -198,12 +200,13 @@ async function getMessageLogs() {
     try {
       const snapshot = await adminApp.database().ref(nodePath).once('value');
       const val = snapshot.val();
-      return val ? Object.values(val) : [];
+      return val ? (Array.isArray(val) ? val : Object.values(val)) : [];
     } catch (err) {}
   }
   try {
     const response = await axios.get(`${databaseUrl}/${nodePath}.json`);
-    return response.data ? Object.values(response.data) : [];
+    const data = response.data;
+    return data ? (Array.isArray(data) ? data : Object.values(data)) : [];
   } catch (err) {
     return [];
   }

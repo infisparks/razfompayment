@@ -240,19 +240,83 @@ router.get('/api/valdho/whatsapp/schedules', async (req, res) => {
     if (err || !rows || rows.length === 0) {
       try {
         const fbSchedules = await firebase.getSchedules();
-        return res.json(fbSchedules);
+        const finalArr = Array.isArray(fbSchedules) ? fbSchedules : (fbSchedules ? Object.values(fbSchedules) : []);
+        return res.json(finalArr);
       } catch (fbErr) {
-        return res.json(rows || []);
+        return res.json(Array.isArray(rows) ? rows : []);
       }
     }
     res.json(rows);
   });
 });
 
+// PUT route to update an existing scheduled message
+router.put('/api/valdho/whatsapp/schedules/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { message_text, scheduled_at } = req.body;
+
+    if (!message_text && !scheduled_at) {
+      return res.status(400).json({ error: 'Provide message_text or scheduled_at to update' });
+    }
+
+    db.run(
+      `UPDATE whatsapp_schedules SET message_text = COALESCE(?, message_text), scheduled_at = COALESCE(?, scheduled_at) WHERE id = ?`,
+      [message_text || null, scheduled_at || null, id],
+      async (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        db.get(`SELECT * FROM whatsapp_schedules WHERE id = ?`, [id], async (getErr, row) => {
+          if (row) {
+            await firebase.saveSchedule(row);
+          }
+          res.json({ status: 'ok', data: row });
+        });
+      }
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete('/api/valdho/whatsapp/schedules/:id', async (req, res) => {
   try {
     await scheduler.cancelScheduleById(req.params.id);
     res.json({ status: 'ok' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// TEMPLATES API (/firstoption_agency_config/templates)
+// -------------------------------------------------------------
+const DEFAULT_TEMPLATES = {
+  half_template: `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`,
+  full_template: `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`
+};
+
+router.get('/api/valdho/templates', async (req, res) => {
+  try {
+    const saved = await firebase.getConfig('templates');
+    if (saved && (saved.half_template || saved.full_template)) {
+      return res.json(saved);
+    }
+    res.json(DEFAULT_TEMPLATES);
+  } catch (err) {
+    res.json(DEFAULT_TEMPLATES);
+  }
+});
+
+router.post('/api/valdho/templates', async (req, res) => {
+  try {
+    const { half_template, full_template } = req.body;
+    const payload = {
+      half_template: half_template || DEFAULT_TEMPLATES.half_template,
+      full_template: full_template || DEFAULT_TEMPLATES.full_template
+    };
+    await firebase.saveConfig('templates', payload);
+    res.json({ status: 'ok', data: payload });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
