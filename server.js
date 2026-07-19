@@ -20,23 +20,13 @@ const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'test_secret';
 // Enable CORS
 app.use(cors());
 
-// Serve static assets from 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Middleware to capture the raw body
-app.use(express.json({
-  verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
-  }
-}));
-
-// Mount modular Valdho automation routes
-app.use(valdhoRouter);
-
-// Page route for Valdho Appointments Dashboard
+// Page route for Valdho Appointments Dashboard (Single canonical template)
 app.get(['/valdho', '/valdho_first_option_agency', '/valdho_first_option_agency.html', '/valdho/index.html'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'valdho', 'index.html'));
 });
+
+// Serve static assets from 'public' directory
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -49,6 +39,9 @@ app.use(express.json({
     req.rawBody = buf.toString();
   }
 }));
+
+// Mount modular Valdho automation routes
+app.use(valdhoRouter);
 
 
 // API endpoint to fetch all stored payments from SQLite
