@@ -43,11 +43,20 @@ async function fetchValdhoAppointments() {
   const statusText = document.getElementById('status-text');
 
   try {
-    const res = await fetch('/api/valdho/appointments');
-    if (!res.ok) throw new Error('Failed to fetch Valdho appointments');
+    const [resApp, resSched] = await Promise.all([
+      fetch('/api/valdho/appointments'),
+      fetch('/api/valdho/whatsapp/schedules')
+    ]);
 
-    const data = await res.json();
-    valdhoAppointments = Array.isArray(data) ? data : [];
+    if (!resApp.ok) throw new Error('Failed to fetch Valdho appointments');
+
+    const dataApp = await resApp.json();
+    valdhoAppointments = Array.isArray(dataApp) ? dataApp : [];
+
+    if (resSched.ok) {
+      const dataSched = await resSched.json();
+      scheduledQueue = Array.isArray(dataSched) ? dataSched : (typeof dataSched === 'object' && dataSched !== null ? Object.values(dataSched) : []);
+    }
 
     if (statusDot) {
       statusDot.style.backgroundColor = '#10b981';
@@ -58,6 +67,7 @@ async function fetchValdhoAppointments() {
     renderValdhoTable();
     updateValdhoStats();
     checkAutomationStatus();
+    startCountdownTicker();
   } catch (error) {
     console.error('Error fetching appointments:', error);
     if (statusDot) {
@@ -69,7 +79,7 @@ async function fetchValdhoAppointments() {
     if (valdhoBody) {
       valdhoBody.innerHTML = `
         <tr>
-          <td colspan="6" class="empty-state" style="color: #ef4444;">
+          <td colspan="7" class="empty-state" style="color: #ef4444;">
             <i data-lucide="alert-triangle" style="width: 24px; height: 24px; margin-bottom: 8px;"></i>
             <p>Error loading Valdho appointment data.</p>
           </td>
@@ -87,7 +97,7 @@ function renderValdhoTable() {
   if (valdhoAppointments.length === 0) {
     valdhoBody.innerHTML = `
       <tr>
-        <td colspan="6" class="empty-state">
+        <td colspan="7" class="empty-state">
           <i data-lucide="folder-open" style="width: 24px; height: 24px; margin-bottom: 8px;"></i>
           <p>No appointments in <strong>firstoption_agency</strong> node yet. Submit a Valdho form to test live webhook storage.</p>
         </td>
@@ -133,6 +143,17 @@ function renderValdhoTable() {
     const phone = app.phone || step1Data['Phone Number'] || 'N/A';
     const updatedDate = app.updated_at || app.created_at ? new Date(app.updated_at || app.created_at).toLocaleString('en-IN') : '-';
 
+    const emailKey = email.replace(/[@.]/g, '_');
+    const leadSched = (scheduledQueue || []).find(s => s.email === email && s.status === 'pending');
+    let leadCountdownHtml = '-';
+    if (leadSched) {
+      leadCountdownHtml = getCountdownText(leadSched.scheduled_at, false);
+    } else if (isCompleted) {
+      leadCountdownHtml = `<span class="badge badge-captured" style="background-color: #ecfdf5; color: #059669; font-weight: 600;">Full Form Completed ✅</span>`;
+    } else {
+      leadCountdownHtml = `<span style="color: #9ca3af; font-size: 13px;">No Pending Schedule</span>`;
+    }
+
     return `
       <tr>
         <td data-label="Lead / Contact">
@@ -144,6 +165,7 @@ function renderValdhoTable() {
         <td data-label="Phone Number"><strong>${phone}</strong></td>
         <td data-label="Form Selections / Answers">${choicesHtml}</td>
         <td data-label="Status">${statusBadge}</td>
+        <td data-label="Next Auto Message Countdown" id="lead-countdown-${emailKey}">${leadCountdownHtml}</td>
         <td data-label="Last Submission">${updatedDate}</td>
         <td data-label="Actions" style="text-align: right; white-space: nowrap;">
           <button class="btn btn-secondary" onclick="openValdhoDetails('${email}')" style="padding: 6px 12px; font-size: 13px; margin-right: 4px;">
@@ -285,11 +307,27 @@ function getCountdownText(targetIso, isSent) {
 function startCountdownTicker() {
   if (countdownTimerInterval) clearInterval(countdownTimerInterval);
   countdownTimerInterval = setInterval(() => {
+    // 1. Scheduled Queue Modal Ticker
     if (scheduledQueue && scheduledQueue.length > 0) {
       scheduledQueue.forEach(item => {
         const el = document.getElementById(`countdown-${item.id}`);
         if (el) {
           el.innerHTML = getCountdownText(item.scheduled_at, item.status === 'sent');
+        }
+      });
+    }
+
+    // 2. Main Appointment Table Ticker
+    if (valdhoAppointments && valdhoAppointments.length > 0) {
+      valdhoAppointments.forEach(app => {
+        const email = app.email || '';
+        const emailKey = email.replace(/[@.]/g, '_');
+        const el = document.getElementById(`lead-countdown-${emailKey}`);
+        if (el) {
+          const leadSched = (scheduledQueue || []).find(s => s.email === email && s.status === 'pending');
+          if (leadSched) {
+            el.innerHTML = getCountdownText(leadSched.scheduled_at, false);
+          }
         }
       });
     }

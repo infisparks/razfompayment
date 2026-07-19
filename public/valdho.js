@@ -136,10 +136,6 @@ function renderValdhoTable() {
         <td data-label="Status">${statusBadge}</td>
         <td data-label="Last Submission">${updatedDate}</td>
         <td data-label="Actions" style="text-align: right; white-space: nowrap;">
-          <button class="btn" onclick="openWhatsAppModal('${email}')" style="background-color: #25d366; color: white; padding: 6px 12px; font-size: 13px; margin-right: 4px;">
-            <i data-lucide="message-square" style="width: 14px; height: 14px;"></i>
-            WhatsApp
-          </button>
           <button class="btn btn-secondary" onclick="openValdhoDetails('${email}')" style="padding: 6px 12px; font-size: 13px; margin-right: 4px;">
             Inspect
           </button>

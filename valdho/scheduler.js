@@ -84,8 +84,12 @@ async function scheduleMessage({ email, phone, lead_name, form_type, message_tex
     targetDate.setDate(targetDate.getDate() + 1);
   } else if (interval === '5d') {
     targetDate.setDate(targetDate.getDate() + 5);
+  } else if (interval === '7d') {
+    targetDate.setDate(targetDate.getDate() + 7);
   } else if (interval === '10d') {
     targetDate.setDate(targetDate.getDate() + 10);
+  } else if (interval === '30d') {
+    targetDate.setDate(targetDate.getDate() + 30);
   } else if (scheduled_at) {
     targetDate = new Date(scheduled_at);
   } else {
