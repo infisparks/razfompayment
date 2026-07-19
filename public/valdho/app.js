@@ -4,6 +4,7 @@ let selectedLeadForWa = null;
 let scheduledQueue = [];
 let dispatchLogs = [];
 let isAutomationPaused = false;
+let countdownTimerInterval = null;
 
 // Default Template fallback
 let currentTemplates = {
@@ -258,6 +259,48 @@ function updateAutomationUI() {
 }
 
 // -------------------------------------------------------------
+// COUNTDOWN TIMER CALCULATOR
+// -------------------------------------------------------------
+function getCountdownText(targetIso, isSent) {
+  if (isSent) return `<span class="badge badge-captured">Completed ✅</span>`;
+  if (!targetIso) return '-';
+
+  const diffMs = new Date(targetIso).getTime() - Date.now();
+
+  if (diffMs <= 0) {
+    return `<span class="badge" style="background-color: #ef4444; color: white;">⚡ Due Now / Sending...</span>`;
+  }
+
+  const totalSecs = Math.floor(diffMs / 1000);
+  const days = Math.floor(totalSecs / 86400);
+  const hours = Math.floor((totalSecs % 86400) / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+
+  let str = '';
+  if (days > 0) str += `${days}d `;
+  if (hours > 0 || days > 0) str += `${hours}h `;
+  if (mins > 0 || hours > 0 || days > 0) str += `${mins}m `;
+  str += `${secs}s`;
+
+  return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 12px;">⏳ in ${str}</span>`;
+}
+
+function startCountdownTicker() {
+  if (countdownTimerInterval) clearInterval(countdownTimerInterval);
+  countdownTimerInterval = setInterval(() => {
+    if (scheduledQueue && scheduledQueue.length > 0) {
+      scheduledQueue.forEach(item => {
+        const el = document.getElementById(`countdown-${item.id}`);
+        if (el) {
+          el.innerHTML = getCountdownText(item.scheduled_at, item.status === 'sent');
+        }
+      });
+    }
+  }, 1000);
+}
+
+// -------------------------------------------------------------
 // SCHEDULED QUEUE MODAL
 // -------------------------------------------------------------
 async function fetchScheduledQueue() {
@@ -269,9 +312,10 @@ async function fetchScheduledQueue() {
     const data = await res.json();
     scheduledQueue = Array.isArray(data) ? data : (typeof data === 'object' && data !== null ? Object.values(data) : []);
     renderQueueTable();
+    startCountdownTicker();
   } catch (e) {
     console.error('Error fetching scheduled queue:', e);
-    if (queueBody) queueBody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color: #ef4444;">Failed to load scheduled queue.</td></tr>`;
+    if (queueBody) queueBody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color: #ef4444;">Failed to load scheduled queue.</td></tr>`;
   }
 }
 
@@ -280,7 +324,7 @@ function renderQueueTable() {
   if (!queueBody) return;
 
   if (scheduledQueue.length === 0) {
-    queueBody.innerHTML = `<tr><td colspan="6" class="empty-state"><p>No scheduled WhatsApp messages in queue.</p></td></tr>`;
+    queueBody.innerHTML = `<tr><td colspan="7" class="empty-state"><p>No scheduled WhatsApp messages in queue.</p></td></tr>`;
     return;
   }
 
@@ -291,6 +335,7 @@ function renderQueueTable() {
       : `<span class="badge badge-pending">Pending ⏳</span>`;
 
     const schedDate = item.scheduled_at ? new Date(item.scheduled_at).toLocaleString('en-IN') : '-';
+    const countdownHtml = getCountdownText(item.scheduled_at, isSent);
 
     return `
       <tr>
@@ -298,6 +343,7 @@ function renderQueueTable() {
         <td data-label="Phone">${item.phone}</td>
         <td data-label="Form Type"><span class="choice-pill">${item.form_type}</span></td>
         <td data-label="Target Scheduled Date">${schedDate}</td>
+        <td data-label="Time Remaining" id="countdown-${item.id}">${countdownHtml}</td>
         <td data-label="Status">${statusBadge}</td>
         <td data-label="Action" style="text-align: right; white-space: nowrap;">
           <button class="btn btn-secondary" onclick="openEditScheduleModal(${item.id})" style="padding: 4px 8px; font-size: 12px; margin-right: 4px;">
@@ -340,8 +386,10 @@ window.openEditScheduleModal = function(id) {
 };
 
 // -------------------------------------------------------------
-// MESSAGE DISPATCH LOGS MODAL
+// MESSAGE DISPATCH LOGS MODAL (WITH READ MORE / READ LESS)
 // -------------------------------------------------------------
+let expandedLogsMap = {};
+
 async function fetchDispatchLogs() {
   const logsBody = document.getElementById('logs-body');
   try {
@@ -354,6 +402,11 @@ async function fetchDispatchLogs() {
   }
 }
 
+window.toggleLogMessage = function(logId) {
+  expandedLogsMap[logId] = !expandedLogsMap[logId];
+  renderLogsTable();
+};
+
 function renderLogsTable() {
   const logsBody = document.getElementById('logs-body');
   if (!logsBody) return;
@@ -363,7 +416,8 @@ function renderLogsTable() {
     return;
   }
 
-  logsBody.innerHTML = dispatchLogs.map(log => {
+  logsBody.innerHTML = dispatchLogs.map((log, index) => {
+    const logId = log.id || `log_${index}`;
     const isSent = log.status === 'sent' || log.status === 'accepted';
     const statusBadge = isSent
       ? `<span class="badge badge-captured">Sent ✅</span>`
@@ -373,16 +427,44 @@ function renderLogsTable() {
       ? new Date(log.received_at || log.sent_at || log.created_at).toLocaleString('en-IN')
       : '-';
 
+    const rawMsg = log.message_text || log.raw_payload || '-';
+    const isLong = rawMsg.length > 70;
+    const isExpanded = !!expandedLogsMap[logId];
+
+    let msgHtml = '';
+    if (isLong) {
+      if (isExpanded) {
+        msgHtml = `
+          <div style="white-space: pre-wrap; font-size: 13px; color: #1e293b;">${rawMsg}</div>
+          <button onclick="toggleLogMessage('${logId}')" style="background: none; border: none; color: #6366f1; cursor: pointer; font-size: 12px; font-weight: 600; margin-top: 4px;">
+            Show Less ▴
+          </button>
+        `;
+      } else {
+        const snippet = rawMsg.substring(0, 70);
+        msgHtml = `
+          <div style="font-size: 13px; color: #475569;">${snippet}...</div>
+          <button onclick="toggleLogMessage('${logId}')" style="background: none; border: none; color: #6366f1; cursor: pointer; font-size: 12px; font-weight: 600; margin-top: 2px;">
+            Read More ▾
+          </button>
+        `;
+      }
+    } else {
+      msgHtml = `<div style="white-space: pre-wrap; font-size: 13px;">${rawMsg}</div>`;
+    }
+
     return `
       <tr>
         <td data-label="Recipient Phone"><strong>${log.recipient || log.phone || 'N/A'}</strong></td>
         <td data-label="Lead Reference">${log.payment_id || log.email || 'N/A'}</td>
-        <td data-label="Message Content" style="max-width: 280px; word-break: break-word; font-size: 13px;">${log.message_text || log.raw_payload || '-'}</td>
+        <td data-label="Message Content" style="max-width: 320px;">${msgHtml}</td>
         <td data-label="Status">${statusBadge}</td>
-        <td data-label="Timestamp">${date}</td>
+        <td data-label="Timestamp" style="white-space: nowrap; font-size: 13px; color: #64748b;">${date}</td>
       </tr>
     `;
   }).join('');
+
+  if (window.lucide) lucide.createIcons();
 }
 
 // -------------------------------------------------------------
@@ -445,7 +527,10 @@ window.openValdhoDetails = function(email) {
 // Modal Close Helpers
 function closeModal() { document.getElementById('modal-backdrop').classList.remove('active'); }
 function closeWhatsAppModal() { document.getElementById('modal-whatsapp-backdrop').classList.remove('active'); }
-function closeQueueModal() { document.getElementById('modal-queue-backdrop').classList.remove('active'); }
+function closeQueueModal() {
+  document.getElementById('modal-queue-backdrop').classList.remove('active');
+  if (countdownTimerInterval) clearInterval(countdownTimerInterval);
+}
 function closeLogsModal() { document.getElementById('modal-logs-backdrop').classList.remove('active'); }
 function closeTemplatesModal() { document.getElementById('modal-templates-backdrop').classList.remove('active'); }
 function closeRulesModal() { document.getElementById('modal-rules-backdrop').classList.remove('active'); }
@@ -535,18 +620,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-
-  safeAddListener('btn-tmpl-half', 'click', () => {
-    if (selectedLeadForWa) {
-      document.getElementById('wa-message-text').value = currentTemplates.half_template.replace(/\{name\}/g, selectedLeadForWa.name);
-    }
-  });
-
-  safeAddListener('btn-tmpl-full', 'click', () => {
-    if (selectedLeadForWa) {
-      document.getElementById('wa-message-text').value = currentTemplates.full_template.replace(/\{name\}/g, selectedLeadForWa.name).replace(/\{answers\}/g, 'Step 2 Completed');
-    }
-  });
 
   // Save Templates Form Submission
   const formTemplates = document.getElementById('form-templates');
