@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>valdho_first_option_agency - Automation & Webhook Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Load Lucide icons for UI symbols -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div>
+        <h1 id="page-title">valdho_first_option_agency</h1>
+        <div class="subtitle" id="page-subtitle">Real-time appointment webhooks & Evolution WhatsApp scheduling engine</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <!-- Live Pause/Resume Automation Toggle -->
+        <button class="btn" id="btn-toggle-automation" style="background-color: #d97706; color: white;">
+          <i data-lucide="pause" style="width: 16px; height: 16px;" id="icon-toggle-automation"></i>
+          <span id="text-toggle-automation">Pause Automation</span>
+        </button>
+
+        <button class="btn" id="btn-open-scheduled-modal" style="background-color: #059669; color: white;">
+          <i data-lucide="clock" style="width: 16px; height: 16px;"></i>
+          Scheduled Queue
+        </button>
+
+        <button class="btn" id="btn-open-logs-modal" style="background-color: #3b82f6; color: white;">
+          <i data-lucide="file-text" style="width: 16px; height: 16px;"></i>
+          Message Logs
+        </button>
+
+        <button class="btn" id="btn-open-integration-modal" style="background-color: #1e1b4b; color: white;">
+          <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+          Add Integration
+        </button>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="nav-tabs">
+      <a href="/" class="nav-tab" style="text-decoration: none;">
+        <i data-lucide="credit-card" style="width: 16px; height: 16px;"></i>
+        Razorpay Payments
+      </a>
+      <a href="/valdho/index.html" class="nav-tab active" style="text-decoration: none;">
+        <i data-lucide="folder" style="width: 16px; height: 16px;"></i>
+        valdho_first_option_agency
+      </a>
+    </div>
+
+    <!-- VALDHO VIEW -->
+    <div id="view-valdho">
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Appointments</div>
+          <div class="stat-value" id="stat-valdho-total">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Completed 2-Step (Full Form)</div>
+          <div class="stat-value" id="stat-valdho-completed" style="color: #059669;">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Step 1 Received (Half Form)</div>
+          <div class="stat-value" id="stat-valdho-step1" style="color: #d97706;">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Automation Engine Status</div>
+          <div class="stat-value" id="stat-engine-status" style="font-size: 16px; color: #10b981;">▶️ Active</div>
+        </div>
+      </div>
+
+      <!-- Appointments Card -->
+      <div class="dashboard-card">
+        <div class="card-header">
+          <div class="card-title">Valdho Form Appointments (firstoption_agency)</div>
+          <div>
+            <button class="btn btn-secondary" id="btn-refresh-valdho">
+              <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
+              Refresh
+            </button>
+          </div>
+        </div>
+        
+        <!-- Table -->
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Lead / Contact</th>
+                <th>Phone Number</th>
+                <th>Form Selections / Answers</th>
+                <th>Status</th>
+                <th>Last Submission</th>
+                <th style="text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="valdho-body">
+              <tr>
+                <td colspan="6" class="empty-state">
+                  <i data-lucide="loader" class="spin" style="width: 24px; height: 24px;"></i>
+                  <p>Loading Valdho appointments...</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Payload Modal -->
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">Valdho Lead Details</div>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div><strong>ID / Email:</strong> <span id="modal-pay-id">-</span></div>
+          <div><strong>Status:</strong> <span id="modal-pay-status">-</span></div>
+          <div><strong>Email:</strong> <span id="modal-pay-email">-</span></div>
+          <div><strong>Phone:</strong> <span id="modal-pay-phone">-</span></div>
+          <div><strong>Target Firebase Node:</strong> <span id="modal-pay-company">/firstoption_agency</span></div>
+          <div><strong>Submission Date:</strong> <span id="modal-pay-date">-</span></div>
+        </div>
+        <strong>Full Webhook Payload (JSON):</strong>
+        <pre><code id="modal-raw-payload">-</code></pre>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="modal-btn-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WHATSAPP SENDER & SCHEDULER MODAL -->
+  <div class="modal-backdrop" id="modal-whatsapp-backdrop">
+    <div class="modal" style="max-width: 650px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="send" style="width: 20px; height: 20px; color: #25d366;"></i>
+          Send / Schedule WhatsApp Message
+        </div>
+        <button class="modal-close" id="modal-whatsapp-close">&times;</button>
+      </div>
+      <form id="form-whatsapp">
+        <div class="modal-body">
+          <div style="margin-bottom: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+            <div><strong>Lead Name:</strong> <span id="wa-lead-name">-</span></div>
+            <div><strong>Phone Number:</strong> <span id="wa-lead-phone">-</span></div>
+            <div><strong>Email:</strong> <span id="wa-lead-email">-</span></div>
+            <div><strong>Form Type:</strong> <span id="wa-lead-type">-</span></div>
+          </div>
+
+          <!-- Template Preset Quick Selector -->
+          <div class="form-group">
+            <label class="form-label">TEMPLATE PRESETS</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn btn-secondary" id="btn-tmpl-half" style="font-size: 12px; padding: 6px 12px;">
+                Half Form Reminder (Step 1)
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-tmpl-full" style="font-size: 12px; padding: 6px 12px;">
+                Full Form Confirmation (Step 2)
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="wa-message-text">MESSAGE TEXT <span style="color: #ef4444;">*</span></label>
+            <textarea class="form-input" id="wa-message-text" rows="6" placeholder="Type WhatsApp message here... (Use {name}, {phone}, {email}, {answers})" required></textarea>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+              Placeholders: <code>{name}</code>, <code>{phone}</code>, <code>{email}</code>, <code>{answers}</code>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="wa-schedule-mode">SEND TIMING / REPEAT INTERVAL <span style="color: #ef4444;">*</span></label>
+            <select class="form-select" id="wa-schedule-mode">
+              <option value="now" selected>⚡ Send Immediately Now</option>
+              <option value="1m">⏱️ Test Schedule (1 Minute)</option>
+              <option value="1h">⏱️ Repeat / Send Every 1 Hour</option>
+              <option value="1d">📅 Send After 1 Day</option>
+              <option value="5d">📅 Send After 5 Days</option>
+              <option value="10d">📅 Send After 10 Days</option>
+              <option value="custom">🗓️ Pick Specific Date & Time</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="group-custom-date" style="display: none;">
+            <label class="form-label" for="wa-custom-date">TARGET SCHEDULE DATE & TIME</label>
+            <input type="datetime-local" class="form-input" id="wa-custom-date" />
+          </div>
+        </div>
+
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-whatsapp">Cancel</button>
+          <button type="submit" class="btn" style="background-color: #25d366; color: white;">
+            <i data-lucide="send" style="width: 16px; height: 16px;"></i>
+            Submit Message
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SCHEDULED MESSAGES QUEUE MODAL -->
+  <div class="modal-backdrop" id="modal-queue-backdrop">
+    <div class="modal" style="max-width: 850px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="clock" style="width: 20px; height: 20px; color: #059669;"></i>
+          Scheduled WhatsApp Follow-up Queue
+        </div>
+        <button class="modal-close" id="modal-queue-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Lead / Contact</th>
+                <th>Phone</th>
+                <th>Form Type</th>
+                <th>Target Scheduled Date</th>
+                <th>Status</th>
+                <th style="text-align: right;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="queue-body">
+              <tr>
+                <td colspan="6" class="empty-state">
+                  <i data-lucide="loader" class="spin" style="width: 24px; height: 24px;"></i>
+                  <p>Loading scheduled queue...</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-close-queue">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MESSAGE DISPATCH LOGS MODAL -->
+  <div class="modal-backdrop" id="modal-logs-backdrop">
+    <div class="modal" style="max-width: 900px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="file-text" style="width: 20px; height: 20px; color: #3b82f6;"></i>
+          WhatsApp Dispatch Logs (Who Received Messages)
+        </div>
+        <button class="modal-close" id="modal-logs-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Recipient Phone</th>
+                <th>Lead Reference</th>
+                <th>Message Content</th>
+                <th>Status</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="logs-body">
+              <tr>
+                <td colspan="5" class="empty-state">
+                  <i data-lucide="loader" class="spin" style="width: 24px; height: 24px;"></i>
+                  <p>Loading dispatch logs...</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-close-logs">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD INTEGRATION MODAL -->
+  <div class="modal-backdrop" id="modal-integration-backdrop">
+    <div class="modal" style="max-width: 600px;">
+      <div class="modal-header">
+        <div class="modal-title">Add New Integration</div>
+        <button class="modal-close" id="modal-integration-close">&times;</button>
+      </div>
+      <form id="form-add-integration">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="integration-name">Name <span style="color: #ef4444;">*</span></label>
+            <input type="text" class="form-input" id="integration-name" value="valdho_first_option_agency" placeholder="Enter Integration name" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="integration-url">WEBHOOK URL <span style="color: #ef4444;">*</span></label>
+            <input type="url" class="form-input" id="integration-url" value="https://raz.infiplus.in/valdho/webhook" placeholder="Enter your webhook endpoint URL" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="integration-method">HTTP METHOD <span style="color: #ef4444;">*</span></label>
+            <select class="form-select" id="integration-method" required>
+              <option value="POST" selected>POST</option>
+              <option value="GET">GET</option>
+              <option value="PUT">PUT</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="integration-auth">AUTHORIZATION HEADER</label>
+            <input type="text" class="form-input" id="integration-auth" placeholder="Bearer token or API key (optional)" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="integration-headers">CUSTOM HEADERS</label>
+            <textarea class="form-input" id="integration-headers" rows="3" placeholder='Additional headers as JSON (optional)'></textarea>
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-integration">Cancel</button>
+          <button type="submit" class="btn" style="background-color: #1e1b4b; color: white;">Add New Integration</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

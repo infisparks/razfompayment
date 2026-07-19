@@ -10,6 +10,9 @@ const firebaseService = require('./services/firebaseService');
 const evolutionWhatsappService = require('./services/evolutionWhatsappService');
 const schedulerService = require('./services/schedulerService');
 
+const valdhoRouter = require('./valdho/routes');
+const valdhoScheduler = require('./valdho/scheduler');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'test_secret';
@@ -20,9 +23,19 @@ app.use(cors());
 // Serve static assets from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Middleware to capture the raw body
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
+
+// Mount modular Valdho automation routes
+app.use(valdhoRouter);
+
 // Page route for Valdho Appointments Dashboard
-app.get(['/valdho', '/valdho_first_option_agency', '/valdho_first_option_agency.html'], (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'valdho_first_option_agency.html'));
+app.get(['/valdho', '/valdho_first_option_agency', '/valdho_first_option_agency.html', '/valdho/index.html'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'valdho', 'index.html'));
 });
 
 // Health check endpoint
@@ -526,4 +539,5 @@ app.listen(PORT, () => {
   
   // Start background scheduler worker
   schedulerService.startScheduler();
+  valdhoScheduler.startScheduler();
 });
