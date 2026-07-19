@@ -139,12 +139,8 @@ async function scheduleMessage({ email, phone, lead_name, form_type, message_tex
   });
 }
 
-const HARDCODED_HALF_FORM_TEMPLATE = `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`;
-
-const HARDCODED_FULL_FORM_TEMPLATE = `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`;
-
 /**
- * Automatically schedule follow-up message when a webhook is received (Hardcoded 5m Interval)
+ * Automatically schedule follow-up message when a webhook is received (Configured via valdho/config.js)
  */
 async function autoScheduleLead(lead, formType) {
   if (!lead || !lead.email) return;
@@ -162,7 +158,7 @@ async function autoScheduleLead(lead, formType) {
     const allData = typeof lead.all_form_data === 'string' ? JSON.parse(lead.all_form_data) : (lead.all_form_data || {});
     Object.keys(allData).forEach(k => { if (Array.isArray(allData[k])) choices.push(...allData[k]); });
     
-    const msgText = HARDCODED_FULL_FORM_TEMPLATE.replace(/\{name\}/g, name).replace(/\{answers\}/g, choices.join(', ') || 'Step 2 Completed');
+    const msgText = (config.fullFormMessage || '').replace(/\{name\}/g, name).replace(/\{answers\}/g, choices.join(', ') || 'Step 2 Completed');
 
     await scheduleMessage({
       email,
@@ -170,21 +166,21 @@ async function autoScheduleLead(lead, formType) {
       lead_name: name,
       form_type: 'full_form',
       message_text: msgText,
-      interval: '5m'
+      interval: `${config.INTERVAL_MINUTES || 5}m`
     });
     return;
   }
 
   // If Step 1 (Half Form) is received
   if (formType === 'half_form') {
-    const msgText = HARDCODED_HALF_FORM_TEMPLATE.replace(/\{name\}/g, name);
+    const msgText = (config.halfFormMessage || '').replace(/\{name\}/g, name);
     await scheduleMessage({
       email,
       phone,
       lead_name: name,
       form_type: 'half_form',
       message_text: msgText,
-      interval: '5m'
+      interval: `${config.INTERVAL_MINUTES || 5}m`
     });
   }
 }
