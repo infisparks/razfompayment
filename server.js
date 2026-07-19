@@ -163,14 +163,25 @@ app.post('/valdho/webhook', async (req, res) => {
       try { if (existing.all_form_data) mergedAll = { ...JSON.parse(existing.all_form_data), ...payload }; } catch (e) {}
     }
 
+    // Extract REAL Name & Phone by checking current payload, mergedStep1, mergedAll, AND existing record!
+    const finalName = formData['First Name'] || formData.name || formData.first_name || payload['First Name'] || payload.name
+      || mergedStep1['First Name'] || mergedStep1.name || mergedStep1.first_name
+      || (existing && existing.name && existing.name !== 'Valdho Lead' ? existing.name : null)
+      || 'Valdho Lead';
+
+    const finalPhone = formData['Phone Number'] || formData.phone || formData.mobile || payload['Phone Number'] || payload.phone
+      || mergedStep1['Phone Number'] || mergedStep1.phone || mergedStep1.mobile
+      || (existing && existing.phone && existing.phone !== 'N/A' ? existing.phone : null)
+      || 'N/A';
+
     const finalStatus = (existing && existing.status === 'completed') || isCompleted ? 'completed' : 'step1_received';
 
     const insertQuery = `
       INSERT INTO valdho_appointments (email, name, phone, status, step1_data, step2_data, all_form_data, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(email) DO UPDATE SET
-        name = COALESCE(excluded.name, valdho_appointments.name),
-        phone = COALESCE(excluded.phone, valdho_appointments.phone),
+        name = CASE WHEN excluded.name != 'Valdho Lead' THEN excluded.name ELSE valdho_appointments.name END,
+        phone = CASE WHEN excluded.phone != 'N/A' THEN excluded.phone ELSE valdho_appointments.phone END,
         status = excluded.status,
         step1_data = excluded.step1_data,
         step2_data = excluded.step2_data,
@@ -180,7 +191,7 @@ app.post('/valdho/webhook', async (req, res) => {
 
     await new Promise((resolve, reject) => {
       db.run(insertQuery, [
-        email, name, phone, finalStatus,
+        email, finalName, finalPhone, finalStatus,
         JSON.stringify(mergedStep1), JSON.stringify(mergedStep2), JSON.stringify(mergedAll)
       ], function(err) {
         if (err) reject(err); else resolve();
@@ -190,8 +201,8 @@ app.post('/valdho/webhook', async (req, res) => {
     // Save to Firebase under /firstoption_agency/{email_key}
     const fbRecord = {
       email,
-      name,
-      phone,
+      name: finalName,
+      phone: finalPhone,
       company: 'firstoption_agency',
       status: finalStatus,
       step1_data: mergedStep1,
@@ -209,12 +220,12 @@ app.post('/valdho/webhook', async (req, res) => {
 
       const choices = [];
       Object.keys(mergedAll).forEach(k => { if (Array.isArray(mergedAll[k])) choices.push(...mergedAll[k]); });
-      const msgText = HARDCODED_FULL_FORM_TEMPLATE.replace(/\{name\}/g, name).replace(/\{answers\}/g, choices.join(', ') || 'Step 2 Completed');
+      const msgText = HARDCODED_FULL_FORM_TEMPLATE.replace(/\{name\}/g, finalName).replace(/\{answers\}/g, choices.join(', ') || 'Step 2 Completed');
 
-      await scheduleMessage({ email, phone, lead_name: name, form_type: 'full_form', message_text: msgText });
+      await scheduleMessage({ email, phone: finalPhone, lead_name: finalName, form_type: 'full_form', message_text: msgText });
     } else {
-      const msgText = HARDCODED_HALF_FORM_TEMPLATE.replace(/\{name\}/g, name);
-      await scheduleMessage({ email, phone, lead_name: name, form_type: 'half_form', message_text: msgText });
+      const msgText = HARDCODED_HALF_FORM_TEMPLATE.replace(/\{name\}/g, finalName);
+      await scheduleMessage({ email, phone: finalPhone, lead_name: finalName, form_type: 'half_form', message_text: msgText });
     }
 
     res.json({ status: 'ok', message: 'Webhook processed & 5m sequence scheduled successfully', email, form_type: finalStatus });

@@ -111,9 +111,16 @@ function renderValdhoTable() {
       ? `<span class="badge badge-captured">Full Form (Completed)</span>`
       : `<span class="badge badge-pending">Half Form (Step 1 Only)</span>`;
 
-    const name = app.name || step1Data['First Name'] || 'Valdho Lead';
-    const email = app.email || step1Data['Email'] || 'N/A';
-    const phone = app.phone || step1Data['Phone Number'] || 'N/A';
+    const name = (app.name && app.name !== 'Valdho Lead' ? app.name : null)
+      || step1Data['First Name'] || step1Data.name || step1Data.first_name
+      || allData['First Name'] || allData.name || 'Valdho Lead';
+
+    const email = app.email || step1Data['Email'] || step1Data.email || allData.email || 'N/A';
+
+    const phone = (app.phone && app.phone !== 'N/A' ? app.phone : null)
+      || step1Data['Phone Number'] || step1Data.phone || step1Data.mobile
+      || allData['Phone Number'] || allData.phone || 'N/A';
+
     const updatedDate = app.updated_at || app.created_at ? new Date(app.updated_at || app.created_at).toLocaleString('en-IN') : '-';
 
     const emailKey = email.toLowerCase().trim().replace(/[^a-zA-Z0-9]/g, '_');
