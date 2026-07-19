@@ -101,35 +101,50 @@ function cancelSchedulesForEmail(email) {
 // -------------------------------------------------------------
 app.post('/valdho/webhook', async (req, res) => {
   try {
-    const payload = req.body;
+    const payload = req.body || {};
     console.log('[Valdho Webhook Received]:', JSON.stringify(payload));
 
-    const email = payload.Email || payload.email || payload.user_email || payload._email || payload.payer_email || (payload.form_data && payload.form_data.email) || null;
-    const name = payload['First Name'] || payload.name || payload.first_name || payload.payer_name || 'Valdho Lead';
-    const phone = payload['Phone Number'] || payload.phone || payload.mobile || payload.payer_phone || 'N/A';
+    const formData = payload.form_data || payload;
+
+    // Extract Email (Searches for any key containing 'email')
+    let email = null;
+    Object.keys(formData).forEach(k => {
+      if (k.toLowerCase().includes('email') && typeof formData[k] === 'string' && formData[k].includes('@')) {
+        email = formData[k].trim();
+      }
+    });
+
+    if (!email) {
+      Object.keys(payload).forEach(k => {
+        if (k.toLowerCase().includes('email') && typeof payload[k] === 'string' && payload[k].includes('@')) {
+          email = payload[k].trim();
+        }
+      });
+    }
 
     if (!email) {
       console.warn('[Valdho Webhook Warning] Received payload without email identifier');
       return res.status(400).json({ status: 'error', error: 'Missing email in payload' });
     }
 
+    // Extract Name & Phone
+    const name = formData['First Name'] || formData.name || formData.first_name || payload['First Name'] || payload.name || 'Valdho Lead';
+    const phone = formData['Phone Number'] || formData.phone || formData.mobile || payload['Phone Number'] || payload.phone || 'N/A';
+
     const emailKey = email.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
-    let formType = 'half_form';
+    const formDataKeys = Object.keys(formData);
+    const hasMultipleChoices = formDataKeys.some(k => Array.isArray(formData[k]) || k.includes('multiple-choice'));
+
     let isCompleted = false;
     let step1Data = {};
     let step2Data = {};
 
-    const payloadKeys = Object.keys(payload);
-    const hasMultipleChoices = payloadKeys.some(k => Array.isArray(payload[k]));
-
-    if (payloadKeys.includes('First Name') && !hasMultipleChoices) {
-      formType = 'half_form';
-      step1Data = payload;
-    } else {
-      formType = 'full_form';
+    if (hasMultipleChoices || !formDataKeys.includes('First Name')) {
       isCompleted = true;
-      step2Data = payload;
+      step2Data = formData;
+    } else {
+      step1Data = formData;
     }
 
     // Save to SQLite
@@ -151,8 +166,8 @@ app.post('/valdho/webhook', async (req, res) => {
     const finalStatus = (existing && existing.status === 'completed') || isCompleted ? 'completed' : 'step1_received';
 
     const insertQuery = `
-      INSERT INTO valdho_appointments (email, name, phone, company, status, step1_data, step2_data, all_form_data, created_at, updated_at)
-      VALUES (?, ?, ?, 'firstoption_agency', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      INSERT INTO valdho_appointments (email, name, phone, status, step1_data, step2_data, all_form_data, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(email) DO UPDATE SET
         name = COALESCE(excluded.name, valdho_appointments.name),
         phone = COALESCE(excluded.phone, valdho_appointments.phone),
