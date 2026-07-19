@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const firebaseService = require('./services/firebaseService');
 const evolutionWhatsappService = require('./services/evolutionWhatsappService');
+const metaCapiService = require('./services/metaCapiService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,9 +36,9 @@ app.get('/health', (req, res) => {
 });
 
 // -------------------------------------------------------------
-// HARDCODED MESSAGE TEMPLATES & 5m INTERVAL CONFIGURATION
+// HARDCODED MESSAGE TEMPLATES & 10m INTERVAL CONFIGURATION
 // -------------------------------------------------------------
-const INTERVAL_MINUTES = 5;
+const INTERVAL_MINUTES = parseInt(process.env.META_DELAY_MINUTES || '10', 10);
 
 const HARDCODED_HALF_FORM_TEMPLATE = `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`;
 
@@ -265,11 +266,15 @@ async function checkAndDispatchDueMessages() {
             }
 
             if (hasStep2) {
-              console.log(`[Scheduler Safety] Lead ${item.email} completed Full Form! Deleting Half Form schedule ID ${item.id}.`);
+              console.log(`[Scheduler Safety] Lead ${item.email} completed Full Form! Deleting Half Form schedule ID ${item.id} (Meta CAPI event canceled).`);
               db.run(`DELETE FROM whatsapp_schedules WHERE id = ?`, [item.id]);
               firebaseService.deleteValdhoSchedule(item.id).catch(e => console.error(e));
               continue;
             }
+
+            // Lead DID NOT complete Step 2 after 10m -> Trigger Meta Retargeting Event (CAPI)!
+            console.log(`[Meta Retargeting Engine] Lead ${item.email} abandoned Half Form after 10 minutes. Sending Meta CAPI LeadIncomplete event!`);
+            metaCapiService.sendMetaRetargetingEvent(item.email, item.phone, item.lead_name).catch(e => console.error(e));
           }
 
           // Dispatch message via Evolution API
