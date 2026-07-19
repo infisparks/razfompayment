@@ -34,37 +34,139 @@ const payloadStep2 = {
   }
 };
 
-async function runTest() {
-  console.log("=== Testing Step 1 Submission ===");
-  const axios = require('axios');
-  
-  // Test local DB & Firebase functions directly
-  const express = require('express');
-  const app = express();
-  
-  // Execute Step 1 payload processing
-  const axiosResp1 = await axios.post('http://localhost:3000/valdho/webhook', payloadStep1).catch(err => {
-    console.log("Server not running locally yet, testing DB directly");
-    return null;
+async function processValdhoWebhookDirect(payload) {
+  const formData = payload.form_data || {};
+  let email = null;
+  let name = null;
+  let phone = null;
+
+  for (const key of Object.keys(formData)) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey === 'email' || lowerKey.endsWith('_email')) {
+      email = String(formData[key]).trim();
+      break;
+    }
+  }
+
+  for (const key of Object.keys(formData)) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey.includes('name') || lowerKey.includes('first name')) {
+      name = String(formData[key]).trim();
+      break;
+    }
+  }
+
+  for (const key of Object.keys(formData)) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey.includes('phone') || lowerKey.includes('contact')) {
+      phone = String(formData[key]).trim();
+      break;
+    }
+  }
+
+  const isStep1 = !!(name || phone || formData["First Name"] || formData["Phone Number"]);
+  const isStep2 = Object.keys(formData).some(k => k.endsWith('_email') || k.includes('multiple-choice') || Array.isArray(formData[k]));
+
+  let existing = await new Promise((resolve) => {
+    db.get('SELECT * FROM valdho_appointments WHERE email = ?', [email], (err, row) => resolve(row || null));
   });
 
-  if (axiosResp1) {
-    console.log("Step 1 Webhook Response:", axiosResp1.data);
-    
-    // Wait 1 sec
-    await new Promise(r => setTimeout(r, 1000));
-    
-    console.log("=== Testing Step 2 Submission ===");
-    const axiosResp2 = await axios.post('http://localhost:3000/valdho/webhook', payloadStep2);
-    console.log("Step 2 Webhook Response:", axiosResp2.data);
+  let step1_data = {};
+  let step2_data = {};
+  let all_form_data = {};
+
+  if (existing) {
+    try { step1_data = JSON.parse(existing.step1_data || '{}'); } catch(e){}
+    try { step2_data = JSON.parse(existing.step2_data || '{}'); } catch(e){}
+    try { all_form_data = JSON.parse(existing.all_form_data || '{}'); } catch(e){}
+    name = name || existing.name;
+    phone = phone || existing.phone;
   }
+
+  if (isStep1 || !existing) {
+    step1_data = { ...step1_data, ...formData };
+  }
+  if (isStep2) {
+    step2_data = { ...step2_data, ...formData };
+  }
+
+  all_form_data = { ...all_form_data, ...formData };
+
+  const status = (isStep2 || (step2_data && Object.keys(step2_data).length > 0)) ? 'completed' : 'step1_received';
+
+  const appointmentRecord = {
+    email: email || `unknown_${Date.now()}@valdho.com`,
+    name: name || 'Valdho Lead',
+    phone: phone || 'N/A',
+    source: payload.source || 'valdho',
+    agency: 'firstoption_agency',
+    step1_data,
+    step2_data,
+    all_form_data,
+    status,
+    raw_payload: payload,
+    updated_at: new Date().toISOString()
+  };
+
+  const query = `
+    INSERT INTO valdho_appointments (email, name, phone, step1_data, step2_data, all_form_data, status, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(email) DO UPDATE SET
+      name = COALESCE(excluded.name, valdho_appointments.name),
+      phone = COALESCE(excluded.phone, valdho_appointments.phone),
+      step1_data = excluded.step1_data,
+      step2_data = excluded.step2_data,
+      all_form_data = excluded.all_form_data,
+      status = excluded.status,
+      updated_at = CURRENT_TIMESTAMP
+  `;
+
+  await new Promise((resolve) => {
+    db.run(query, [
+      appointmentRecord.email,
+      appointmentRecord.name,
+      appointmentRecord.phone,
+      JSON.stringify(step1_data),
+      JSON.stringify(step2_data),
+      JSON.stringify(all_form_data),
+      status
+    ], function(err) {
+      if (err) console.error("DB Error:", err);
+      else console.log(`[SQLite Success] Saved ${appointmentRecord.email} - Status: ${status}`);
+      resolve();
+    });
+  });
+
+  const fbResult = await firebaseService.saveValdhoAppointment(appointmentRecord);
+  console.log(`[Firebase Result]`, fbResult);
 }
 
-// Check database directly
-db.all('SELECT * FROM valdho_appointments', [], (err, rows) => {
-  if (err) {
-    console.error("Error reading SQLite database:", err);
-  } else {
-    console.log("Current SQLite valdho_appointments records:", rows);
-  }
-});
+async function runTest() {
+  // Wait 500ms for db init
+  await new Promise(r => setTimeout(r, 500));
+  
+  console.log("=== 1. Processing Step 1 Webhook Payload ===");
+  await processValdhoWebhookDirect(payloadStep1);
+
+  console.log("\n=== 2. Processing Step 2 Webhook Payload ===");
+  await processValdhoWebhookDirect(payloadStep2);
+
+  console.log("\n=== 3. Reading Final Merged Record from SQLite ===");
+  db.get('SELECT * FROM valdho_appointments WHERE email = ?', ['mudassirs472@gmail.com'], (err, row) => {
+    if (err) console.error(err);
+    else {
+      console.log("Final Merged DB Record:", {
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        phone: row.phone,
+        status: row.status,
+        step1_data: JSON.parse(row.step1_data),
+        step2_data: JSON.parse(row.step2_data),
+        all_form_data: JSON.parse(row.all_form_data)
+      });
+    }
+  });
+}
+
+runTest();
