@@ -256,28 +256,20 @@ function updateAutomationUI() {
 // LIVE COUNTDOWN TIMER CALCULATOR
 // -------------------------------------------------------------
 function getCountdownText(targetIso, isSent) {
-  if (isSent) return `<span class="badge badge-captured">Completed ✅</span>`;
-  if (!targetIso) return '-';
+  if (isSent) return `<span class="badge badge-captured" style="background-color: #ecfdf5; color: #059669; font-weight: 600;">Full Form Completed ✅</span>`;
+  if (!targetIso) return '<span class="badge badge-pending" style="background-color: #fef3c7; color: #92400e;">Scheduling 5m... ⏳</span>';
 
   const diffMs = new Date(targetIso).getTime() - Date.now();
 
   if (diffMs <= 0) {
-    return `<span class="badge" style="background-color: #ef4444; color: white;">⚡ Due Now / Sending...</span>`;
+    return `<span class="badge" style="background-color: #ef4444; color: white;">⚡ Sending 5m Message...</span>`;
   }
 
   const totalSecs = Math.floor(diffMs / 1000);
-  const days = Math.floor(totalSecs / 86400);
-  const hours = Math.floor((totalSecs % 86400) / 3600);
   const mins = Math.floor((totalSecs % 3600) / 60);
   const secs = totalSecs % 60;
 
-  let str = '';
-  if (days > 0) str += `${days}d `;
-  if (hours > 0 || days > 0) str += `${hours}h `;
-  if (mins > 0 || hours > 0 || days > 0) str += `${mins}m `;
-  str += `${secs}s`;
-
-  return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 12px;">⏳ in ${str}</span>`;
+  return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 6px;">⏳ ${mins}m ${secs}s remaining</span>`;
 }
 
 function startCountdownTicker() {
