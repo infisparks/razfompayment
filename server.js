@@ -18,6 +18,16 @@ app.use(cors());
 // Serve static assets from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Page route for Valdho Appointments Dashboard
+app.get(['/valdho', '/valdho_first_option_agency', '/valdho_first_option_agency.html'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'valdho_first_option_agency.html'));
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date() });
+});
+
 // Middleware to capture the raw body for Razorpay signature verification
 app.use(express.json({
   verify: (req, res, buf) => {
@@ -25,10 +35,6 @@ app.use(express.json({
   }
 }));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', time: new Date() });
-});
 
 // API endpoint to fetch all stored payments from SQLite
 app.get('/api/payments', (req, res) => {
