@@ -482,6 +482,42 @@ app.get('/api/valdho/whatsapp/schedules', async (req, res) => {
   });
 });
 
+// DELETE route for Valdho Appointment (also cancels all scheduled messages for that lead)
+app.delete('/api/valdho/appointments/:email', async (req, res) => {
+  try {
+    const email = decodeURIComponent(req.params.email);
+    console.log(`[DELETE Request] Deleting appointment and canceling scheduled messages for ${email}`);
+
+    // 1. Cancel/Delete scheduled WhatsApp messages in SQLite & Firebase
+    await schedulerService.cancelSchedulesForEmail(email);
+
+    // 2. Delete appointment from SQLite
+    db.run('DELETE FROM valdho_appointments WHERE LOWER(email) = LOWER(?)', [email], (err) => {
+      if (err) console.error('Error deleting appointment from SQLite:', err.message);
+    });
+
+    // 3. Delete appointment from Firebase node /firstoption_agency
+    await firebaseService.deleteValdhoAppointment(email);
+
+    res.json({ status: 'ok', message: `Appointment and scheduled messages for ${email} deleted successfully.` });
+  } catch (err) {
+    console.error('Error deleting appointment:', err);
+    res.status(500).json({ error: 'Failed to delete appointment' });
+  }
+});
+
+// DELETE route for individual scheduled message
+app.delete('/api/valdho/whatsapp/schedules/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    await schedulerService.cancelScheduleById(id);
+    res.json({ status: 'ok', message: `Scheduled message ID ${id} deleted successfully.` });
+  } catch (err) {
+    console.error('Error deleting schedule:', err);
+    res.status(500).json({ error: 'Failed to delete schedule' });
+  }
+});
+
 // Start server and initialize background scheduler engine
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

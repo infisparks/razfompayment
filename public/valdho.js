@@ -60,7 +60,7 @@ async function fetchValdhoAppointments() {
   }
 }
 
-// Render Valdho Appointments Table with WhatsApp Action Buttons
+// Render Valdho Appointments Table with Delete & WhatsApp Action Buttons
 function renderValdhoTable() {
   const valdhoBody = document.getElementById('valdho-body');
   if (!valdhoBody) return;
@@ -140,8 +140,12 @@ function renderValdhoTable() {
             <i data-lucide="message-square" style="width: 14px; height: 14px;"></i>
             WhatsApp
           </button>
-          <button class="btn btn-secondary" onclick="openValdhoDetails('${email}')" style="padding: 6px 12px; font-size: 13px;">
+          <button class="btn btn-secondary" onclick="openValdhoDetails('${email}')" style="padding: 6px 12px; font-size: 13px; margin-right: 4px;">
             Inspect
+          </button>
+          <button class="btn" onclick="deleteAppointment('${email}', '${name.replace(/'/g, "\\'")}')" style="background-color: #ef4444; color: white; padding: 6px 10px; font-size: 13px;">
+            <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+            Delete
           </button>
         </td>
       </tr>
@@ -150,6 +154,51 @@ function renderValdhoTable() {
 
   if (window.lucide) lucide.createIcons();
 }
+
+// Delete Appointment (removes lead + cancels all scheduled messages for that lead)
+window.deleteAppointment = async function(email, name) {
+  if (!confirm(`Are you sure you want to delete appointment for "${name}" (${email})?\n\nThis will also CANCEL and DELETE all scheduled WhatsApp follow-up messages so no message will be sent to this lead.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/valdho/appointments/' + encodeURIComponent(email), {
+      method: 'DELETE'
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      alert(`Appointment for ${name} deleted and all scheduled WhatsApp messages canceled!`);
+      fetchValdhoAppointments();
+    } else {
+      alert(`Error deleting appointment: ${data.error || 'Unknown error'}`);
+    }
+  } catch (err) {
+    console.error('Failed to delete appointment:', err);
+    alert(`Failed to delete appointment: ${err.message}`);
+  }
+};
+
+// Delete Single Scheduled Message by ID
+window.deleteSchedule = async function(id) {
+  if (!confirm(`Cancel and delete scheduled WhatsApp message #${id}?`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/valdho/whatsapp/schedules/' + id, {
+      method: 'DELETE'
+    });
+
+    if (res.ok) {
+      fetchScheduledQueue();
+    } else {
+      alert('Failed to delete schedule item.');
+    }
+  } catch (err) {
+    console.error('Error deleting schedule item:', err);
+  }
+};
 
 // Update Valdho statistics grid
 function updateValdhoStats() {
@@ -196,13 +245,11 @@ window.openWhatsAppModal = function(email) {
   const phone = app.phone || 'N/A';
   const formTypeStr = isCompleted ? 'Full Form (Completed)' : 'Half Form (Step 1 Only)';
 
-  // Set Info Headers
   document.getElementById('wa-lead-name').textContent = name;
   document.getElementById('wa-lead-phone').textContent = phone;
   document.getElementById('wa-lead-email').textContent = app.email || 'N/A';
   document.getElementById('wa-lead-type').textContent = formTypeStr;
 
-  // Extract choices summary
   const choices = [];
   const allData = typeof app.all_form_data === 'string' ? JSON.parse(app.all_form_data) : (app.all_form_data || {});
   Object.keys(allData).forEach(k => {
@@ -210,7 +257,6 @@ window.openWhatsAppModal = function(email) {
   });
   const choicesSummary = choices.join(', ');
 
-  // Set default message text based on form type
   const messageInput = document.getElementById('wa-message-text');
   if (isCompleted) {
     messageInput.value = TEMPLATES.full(name, choicesSummary);
@@ -218,7 +264,6 @@ window.openWhatsAppModal = function(email) {
     messageInput.value = TEMPLATES.half(name);
   }
 
-  // Show Modal
   const modalWa = document.getElementById('modal-whatsapp-backdrop');
   if (modalWa) modalWa.classList.add('active');
 };
@@ -273,7 +318,7 @@ async function fetchScheduledQueue() {
   } catch (e) {
     console.error('Error fetching scheduled queue:', e);
     if (queueBody) {
-      queueBody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: #ef4444;">Failed to load queue.</td></tr>`;
+      queueBody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color: #ef4444;">Failed to load queue.</td></tr>`;
     }
   }
 }
@@ -284,7 +329,7 @@ function renderQueueTable() {
   if (!queueBody) return;
 
   if (scheduledQueue.length === 0) {
-    queueBody.innerHTML = `<tr><td colspan="5" class="empty-state"><p>No scheduled WhatsApp messages in queue.</p></td></tr>`;
+    queueBody.innerHTML = `<tr><td colspan="6" class="empty-state"><p>No scheduled WhatsApp messages in queue.</p></td></tr>`;
     return;
   }
 
@@ -303,6 +348,11 @@ function renderQueueTable() {
         <td data-label="Form Type"><span class="choice-pill">${item.form_type}</span></td>
         <td data-label="Target Scheduled Date">${schedDate}</td>
         <td data-label="Status">${statusBadge}</td>
+        <td data-label="Action" style="text-align: right;">
+          <button class="btn" onclick="deleteSchedule(${item.id})" style="background-color: #ef4444; color: white; padding: 4px 8px; font-size: 12px;">
+            Cancel
+          </button>
+        </td>
       </tr>
     `;
   }).join('');
@@ -331,15 +381,12 @@ function closeIntegrationModal() {
 
 // DOM Setup
 document.addEventListener('DOMContentLoaded', () => {
-  // Details Modal
   safeAddListener('modal-close', 'click', closeModal);
   safeAddListener('modal-btn-close', 'click', closeModal);
 
-  // WhatsApp Modal Close
   safeAddListener('modal-whatsapp-close', 'click', closeWhatsAppModal);
   safeAddListener('btn-cancel-whatsapp', 'click', closeWhatsAppModal);
 
-  // Queue Modal
   safeAddListener('btn-open-scheduled-modal', 'click', () => {
     document.getElementById('modal-queue-backdrop').classList.add('active');
     fetchScheduledQueue();
@@ -347,10 +394,8 @@ document.addEventListener('DOMContentLoaded', () => {
   safeAddListener('modal-queue-close', 'click', closeQueueModal);
   safeAddListener('btn-close-queue', 'click', closeQueueModal);
 
-  // Refresh
   safeAddListener('btn-refresh-valdho', 'click', fetchValdhoAppointments);
 
-  // Template switch buttons
   safeAddListener('btn-tmpl-half', 'click', () => {
     if (selectedLeadForWa) {
       document.getElementById('wa-message-text').value = TEMPLATES.half(selectedLeadForWa.name);
@@ -363,7 +408,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Schedule mode toggle (show custom date field if chosen)
   const modeSelect = document.getElementById('wa-schedule-mode');
   if (modeSelect) {
     modeSelect.addEventListener('change', (e) => {
@@ -374,7 +418,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Handle WhatsApp Form Submit
   const formWa = document.getElementById('form-whatsapp');
   if (formWa) {
     formWa.addEventListener('submit', async (e) => {
@@ -389,7 +432,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const formType = isCompleted ? 'full_form' : 'half_form';
 
       if (scheduleMode === 'now') {
-        // Send Immediately
         try {
           const res = await fetch('/api/valdho/whatsapp/send', {
             method: 'POST',
@@ -410,7 +452,6 @@ document.addEventListener('DOMContentLoaded', () => {
           alert(`Failed to send WhatsApp message: ${err.message}`);
         }
       } else {
-        // Schedule for Future (5_days, 10_days, or custom)
         let days_delay = null;
         let scheduled_at = null;
 
@@ -444,7 +485,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Add Integration Modal
   safeAddListener('btn-open-integration-modal', 'click', () => {
     document.getElementById('modal-integration-backdrop').classList.add('active');
   });
