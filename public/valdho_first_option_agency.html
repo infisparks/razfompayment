@@ -23,11 +23,6 @@
           <span id="text-toggle-automation">Pause Automation</span>
         </button>
 
-        <button class="btn" id="btn-open-workflow-modal" style="background-color: #8b5cf6; color: white;">
-          <i data-lucide="zap" style="width: 16px; height: 16px;"></i>
-          Global Automation Workflow
-        </button>
-
         <button class="btn" id="btn-open-scheduled-modal" style="background-color: #059669; color: white;">
           <i data-lucide="clock" style="width: 16px; height: 16px;"></i>
           Scheduled Queue
@@ -36,11 +31,6 @@
         <button class="btn" id="btn-open-logs-modal" style="background-color: #3b82f6; color: white;">
           <i data-lucide="file-text" style="width: 16px; height: 16px;"></i>
           Message Logs
-        </button>
-
-        <button class="btn" id="btn-open-integration-modal" style="background-color: #1e1b4b; color: white;">
-          <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
-          Add Integration
         </button>
       </div>
     </header>
@@ -221,142 +211,6 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="btn-close-logs">Close</button>
       </div>
-    </div>
-  </div>
-
-  <!-- ADD INTEGRATION MODAL -->
-  <div class="modal-backdrop" id="modal-integration-backdrop">
-    <div class="modal" style="max-width: 600px;">
-      <div class="modal-header">
-        <div class="modal-title">Add New Integration</div>
-        <button class="modal-close" id="modal-integration-close">&times;</button>
-      </div>
-      <form id="form-add-integration">
-        <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label" for="integration-name">Name <span style="color: #ef4444;">*</span></label>
-            <input type="text" class="form-input" id="integration-name" value="valdho_first_option_agency" placeholder="Enter Integration name" required />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-url">WEBHOOK URL <span style="color: #ef4444;">*</span></label>
-            <input type="url" class="form-input" id="integration-url" value="https://raz.infiplus.in/valdho/webhook" placeholder="Enter your webhook endpoint URL" required />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-method">HTTP METHOD <span style="color: #ef4444;">*</span></label>
-            <select class="form-select" id="integration-method" required>
-              <option value="POST" selected>POST</option>
-              <option value="GET">GET</option>
-              <option value="PUT">PUT</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-auth">AUTHORIZATION HEADER</label>
-            <input type="text" class="form-input" id="integration-auth" placeholder="Bearer token or API key (optional)" />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-headers">CUSTOM HEADERS</label>
-            <textarea class="form-input" id="integration-headers" rows="3" placeholder='Additional headers as JSON (optional)'></textarea>
-          </div>
-        </div>
-        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
-          <button type="button" class="btn btn-secondary" id="btn-cancel-integration">Cancel</button>
-          <button type="submit" class="btn" style="background-color: #1e1b4b; color: white;">Add New Integration</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- UNIFIED GLOBAL AUTOMATION WORKFLOW RIGHT SLIDE-OVER DRAWER (PERSISTED IN FIREBASE /firstoption_agency_config/global_workflow) -->
-  <div class="drawer-backdrop" id="drawer-workflow-backdrop">
-    <div class="drawer">
-      <div class="drawer-header">
-        <div class="drawer-title" style="display: flex; align-items: center; gap: 8px;">
-          <i data-lucide="zap" style="width: 22px; height: 22px; color: #8b5cf6;"></i>
-          Global Automation Setup
-        </div>
-        <button class="drawer-close" id="drawer-workflow-close">&times;</button>
-      </div>
-      <form id="form-global-workflow" style="display: flex; flex-direction: column; height: 100%;">
-        <div class="drawer-body">
-          <div style="margin-bottom: 20px; background-color: #f3e8ff; border: 1px solid #d8b4fe; border-radius: 10px; padding: 14px; font-size: 13px; color: #6b21a8; line-height: 1.5;">
-            <strong>⚡ Continuous Global Automation Workflow:</strong><br/>
-            Set your sequence rules and message templates once. When a lead submits Step 1 (Half Form), their reminder is auto-scheduled. If they complete Step 2 (Full Form), all Step 1 Half Form reminders are <strong>AUTOMATICALLY CANCELLED & REMOVED</strong>.
-          </div>
-
-          <!-- STEP 1: HALF FORM WORKFLOW -->
-          <div class="form-group" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <strong style="font-size: 15px; color: #d97706;">Step 1: Half Form Follow-up Rule</strong>
-              <label style="font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                <input type="checkbox" id="wf-half-enabled" checked /> Enabled
-              </label>
-            </div>
-
-            <div style="margin-bottom: 12px;">
-              <label class="form-label" for="wf-half-interval">AUTO-SCHEDULE TIMING DELAY</label>
-              <select class="form-select" id="wf-half-interval">
-                <option value="1m">⏱️ Test Schedule (1 Minute)</option>
-                <option value="1h">⏱️ After 1 Hour</option>
-                <option value="1d">📅 After 1 Day</option>
-                <option value="5d" selected>📅 After 5 Days (Recommended)</option>
-                <option value="7d">📅 After 7 Days</option>
-                <option value="10d">📅 After 10 Days</option>
-                <option value="30d">📅 After 30 Days</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="form-label" for="wf-half-message">STEP 1 MESSAGE TEMPLATE</label>
-              <textarea class="form-input" id="wf-half-message" rows="5" placeholder="Enter message text for Step 1 leads..." required></textarea>
-              <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">
-                Placeholders: <code>{name}</code>, <code>{phone}</code>, <code>{email}</code>
-              </div>
-            </div>
-          </div>
-
-          <!-- STEP 2: FULL FORM WORKFLOW -->
-          <div class="form-group" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <strong style="font-size: 15px; color: #059669;">Step 2: Full Form Confirmation Rule</strong>
-              <label style="font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                <input type="checkbox" id="wf-full-enabled" checked /> Enabled
-              </label>
-            </div>
-
-            <div style="margin-bottom: 12px;">
-              <label class="form-label" for="wf-full-interval">AUTO-SEND / SCHEDULE TIMING DELAY</label>
-              <select class="form-select" id="wf-full-interval">
-                <option value="now">⚡ Send Immediately Now</option>
-                <option value="1m" selected>⏱️ Test Schedule (1 Minute)</option>
-                <option value="1h">⏱️ After 1 Hour</option>
-                <option value="1d">📅 After 1 Day</option>
-                <option value="7d">📅 After 7 Days</option>
-                <option value="10d">📅 After 10 Days</option>
-                <option value="30d">📅 After 30 Days</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="form-label" for="wf-full-message">STEP 2 MESSAGE TEMPLATE</label>
-              <textarea class="form-input" id="wf-full-message" rows="5" placeholder="Enter message text for Step 2 completed leads..." required></textarea>
-              <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">
-                Placeholders: <code>{name}</code>, <code>{phone}</code>, <code>{email}</code>, <code>{answers}</code>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="drawer-footer">
-          <button type="button" class="btn btn-secondary" id="btn-cancel-workflow">Cancel</button>
-          <button type="submit" class="btn" style="background-color: #8b5cf6; color: white;">
-            <i data-lucide="save" style="width: 16px; height: 16px;"></i>
-            Save Global Workflow to Firebase
-          </button>
-        </div>
-      </form>
     </div>
   </div>
 
