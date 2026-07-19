@@ -209,6 +209,43 @@ async function getMessageLogs() {
   }
 }
 
+// -------------------------------------------------------------
+// CONFIGURATION (/firstoption_agency_config)
+// -------------------------------------------------------------
+async function saveConfig(key, configData) {
+  const nodePath = `firstoption_agency_config/${key}`;
+  const payload = { ...configData, updated_at: new Date().toISOString() };
+
+  if (adminApp) {
+    try {
+      await adminApp.database().ref(nodePath).set(payload);
+      return { success: true };
+    } catch (err) {}
+  }
+  try {
+    await axios.put(`${databaseUrl}/${nodePath}.json`, payload);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+async function getConfig(key) {
+  const nodePath = `firstoption_agency_config/${key}`;
+  if (adminApp) {
+    try {
+      const snapshot = await adminApp.database().ref(nodePath).once('value');
+      return snapshot.val();
+    } catch (err) {}
+  }
+  try {
+    const response = await axios.get(`${databaseUrl}/${nodePath}.json`);
+    return response.data;
+  } catch (err) {
+    return null;
+  }
+}
+
 module.exports = {
   saveAppointment,
   getAppointments,
@@ -217,5 +254,7 @@ module.exports = {
   getSchedules,
   deleteSchedule,
   saveMessageLog,
-  getMessageLogs
+  getMessageLogs,
+  saveConfig,
+  getConfig
 };

@@ -5,21 +5,69 @@ const whatsapp = require('./whatsapp');
 let schedulerTimer = null;
 let isPaused = false; // Automation Pause/Resume state
 
-function pauseAutomation() {
+async function pauseAutomation() {
   isPaused = true;
   console.log('[Valdho Scheduler] Automation engine PAUSED ⏸️');
+  await firebase.saveConfig('automation_status', { isPaused: true });
   return { isPaused: true };
 }
 
-function resumeAutomation() {
+async function resumeAutomation() {
   isPaused = false;
   console.log('[Valdho Scheduler] Automation engine RESUMED ▶️');
+  await firebase.saveConfig('automation_status', { isPaused: false });
   checkAndDispatchDueMessages();
   return { isPaused: false };
 }
 
 function getAutomationStatus() {
   return { isPaused };
+}
+
+/**
+ * Initialize scheduler state and restore pending schedules from Firebase on redeployment
+ */
+async function syncStateFromFirebase() {
+  try {
+    // 1. Restore Automation Pause/Resume status from Firebase
+    const config = await firebase.getConfig('automation_status');
+    if (config && typeof config.isPaused === 'boolean') {
+      isPaused = config.isPaused;
+      console.log(`[Valdho Scheduler] Restored automation status from Firebase: ${isPaused ? 'PAUSED ⏸️' : 'ACTIVE ▶️'}`);
+    }
+
+    // 2. Restore pending schedules from Firebase into SQLite
+    const fbSchedules = await firebase.getSchedules();
+    if (fbSchedules && fbSchedules.length > 0) {
+      fbSchedules.forEach(sched => {
+        if (sched && sched.phone && sched.scheduled_at) {
+          const query = `
+            INSERT INTO whatsapp_schedules (id, email, phone, lead_name, form_type, message_text, scheduled_at, status, created_at, sent_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              status = excluded.status,
+              sent_at = excluded.sent_at,
+              error_message = excluded.error_message
+          `;
+          db.run(query, [
+            sched.id,
+            sched.email || 'N/A',
+            sched.phone,
+            sched.lead_name || 'Valdho Lead',
+            sched.form_type || 'half_form',
+            sched.message_text || '',
+            sched.scheduled_at,
+            sched.status || 'pending',
+            sched.created_at || new Date().toISOString(),
+            sched.sent_at || null
+          ]);
+        }
+      });
+      console.log(`[Valdho Scheduler] Synced ${fbSchedules.length} schedule(s) from Firebase.`);
+    }
+  } catch (err) {
+    console.warn('[Valdho Scheduler] Firebase sync error during startup:', err.message);
+  }
 }
 
 /**
@@ -193,8 +241,12 @@ async function cancelScheduleById(id) {
 /**
  * Start background scheduler engine (checks every 30s)
  */
-function startScheduler(intervalMs = 30000) {
+async function startScheduler(intervalMs = 30000) {
   if (schedulerTimer) return;
+  
+  // Sync state and pending schedules from Firebase on startup
+  await syncStateFromFirebase();
+
   console.log(`[Valdho Scheduler Engine] Running check every ${intervalMs / 1000}s.`);
   checkAndDispatchDueMessages();
   schedulerTimer = setInterval(checkAndDispatchDueMessages, intervalMs);
@@ -208,5 +260,6 @@ module.exports = {
   checkAndDispatchDueMessages,
   cancelSchedulesForEmail,
   cancelScheduleById,
-  startScheduler
+  startScheduler,
+  syncStateFromFirebase
 };
