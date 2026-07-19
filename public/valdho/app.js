@@ -448,8 +448,22 @@ function closeWhatsAppModal() { document.getElementById('modal-whatsapp-backdrop
 function closeQueueModal() { document.getElementById('modal-queue-backdrop').classList.remove('active'); }
 function closeLogsModal() { document.getElementById('modal-logs-backdrop').classList.remove('active'); }
 function closeTemplatesModal() { document.getElementById('modal-templates-backdrop').classList.remove('active'); }
+function closeRulesModal() { document.getElementById('modal-rules-backdrop').classList.remove('active'); }
 function closeEditSchedModal() { document.getElementById('modal-edit-sched-backdrop').classList.remove('active'); }
 function closeIntegrationModal() { document.getElementById('modal-integration-backdrop').classList.remove('active'); }
+
+async function fetchAutoRules() {
+  try {
+    const res = await fetch('/api/valdho/auto-rules');
+    if (res.ok) {
+      const rules = await res.json();
+      document.getElementById('rule-half-enabled').checked = rules.half_enabled !== false;
+      document.getElementById('rule-half-interval').value = rules.half_interval || '5d';
+      document.getElementById('rule-full-enabled').checked = rules.full_enabled !== false;
+      document.getElementById('rule-full-interval').value = rules.full_interval || '1m';
+    }
+  } catch (e) {}
+}
 
 // DOM Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -481,11 +495,46 @@ document.addEventListener('DOMContentLoaded', () => {
   safeAddListener('modal-templates-close', 'click', closeTemplatesModal);
   safeAddListener('btn-cancel-templates', 'click', closeTemplatesModal);
 
+  safeAddListener('btn-open-rules-modal', 'click', () => {
+    fetchAutoRules();
+    document.getElementById('modal-rules-backdrop').classList.add('active');
+  });
+  safeAddListener('modal-rules-close', 'click', closeRulesModal);
+  safeAddListener('btn-cancel-rules', 'click', closeRulesModal);
+
   safeAddListener('modal-edit-sched-close', 'click', closeEditSchedModal);
   safeAddListener('btn-cancel-edit-sched', 'click', closeEditSchedModal);
 
   safeAddListener('btn-toggle-automation', 'click', toggleAutomationEngine);
   safeAddListener('btn-refresh-valdho', 'click', fetchValdhoAppointments);
+
+  // Auto Rules Form Submit
+  const formAutoRules = document.getElementById('form-auto-rules');
+  if (formAutoRules) {
+    formAutoRules.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const half_enabled = document.getElementById('rule-half-enabled').checked;
+      const half_interval = document.getElementById('rule-half-interval').value;
+      const full_enabled = document.getElementById('rule-full-enabled').checked;
+      const full_interval = document.getElementById('rule-full-interval').value;
+
+      try {
+        const res = await fetch('/api/valdho/auto-rules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ half_enabled, half_interval, full_enabled, full_interval })
+        });
+        if (res.ok) {
+          alert('Automatic Sequence Rules saved to Firebase successfully!');
+          closeRulesModal();
+        } else {
+          alert('Failed to save rules.');
+        }
+      } catch (err) {
+        alert(`Error saving rules: ${err.message}`);
+      }
+    });
+  }
 
   safeAddListener('btn-tmpl-half', 'click', () => {
     if (selectedLeadForWa) {

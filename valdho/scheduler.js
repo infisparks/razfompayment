@@ -132,6 +132,84 @@ async function scheduleMessage({ email, phone, lead_name, form_type, message_tex
   });
 }
 
+const DEFAULT_AUTO_RULES = {
+  half_enabled: true,
+  half_interval: '5d',
+  full_enabled: true,
+  full_interval: '1m'
+};
+
+const DEFAULT_TEMPLATES = {
+  half_template: `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`,
+  full_template: `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`
+};
+
+/**
+ * Automatically schedule follow-up message when a webhook is received
+ */
+async function autoScheduleLead(lead, formType) {
+  if (!lead || !lead.email) return;
+
+  const email = lead.email;
+  const phone = lead.phone || 'N/A';
+  const name = lead.name || 'Valdho Lead';
+
+  // 1. Fetch Auto Rules from Firebase
+  let rules = DEFAULT_AUTO_RULES;
+  try {
+    const savedRules = await firebase.getConfig('auto_rules');
+    if (savedRules) rules = { ...DEFAULT_AUTO_RULES, ...savedRules };
+  } catch (e) {}
+
+  // 2. Fetch Templates from Firebase
+  let templates = DEFAULT_TEMPLATES;
+  try {
+    const savedTemplates = await firebase.getConfig('templates');
+    if (savedTemplates) templates = { ...DEFAULT_TEMPLATES, ...savedTemplates };
+  } catch (e) {}
+
+  // 3. If Step 2 (Full Form) is received, CANCEL all pending Half Form messages immediately!
+  if (formType === 'full_form' || lead.status === 'completed') {
+    console.log(`[Auto Scheduler] Lead ${email} completed Step 2. Canceling all pending Half Form scheduled messages!`);
+    await cancelSchedulesForEmail(email);
+
+    if (rules.full_enabled) {
+      const choices = [];
+      const allData = typeof lead.all_form_data === 'string' ? JSON.parse(lead.all_form_data) : (lead.all_form_data || {});
+      Object.keys(allData).forEach(k => { if (Array.isArray(allData[k])) choices.push(...allData[k]); });
+      
+      const msgText = templates.full_template.replace(/\{name\}/g, name).replace(/\{answers\}/g, choices.join(', ') || 'Step 2 Completed');
+
+      if (rules.full_interval === 'now') {
+        whatsapp.sendEvolutionWhatsApp(phone, msgText).catch(e => console.error(e));
+      } else {
+        await scheduleMessage({
+          email,
+          phone,
+          lead_name: name,
+          form_type: 'full_form',
+          message_text: msgText,
+          interval: rules.full_interval || '1m'
+        });
+      }
+    }
+    return;
+  }
+
+  // 4. If Step 1 (Half Form) is received
+  if (formType === 'half_form' && rules.half_enabled) {
+    const msgText = templates.half_template.replace(/\{name\}/g, name);
+    await scheduleMessage({
+      email,
+      phone,
+      lead_name: name,
+      form_type: 'half_form',
+      message_text: msgText,
+      interval: rules.half_interval || '5d'
+    });
+  }
+}
+
 /**
  * Check DB for due pending scheduled messages and send them
  */
@@ -147,23 +225,45 @@ async function checkAndDispatchDueMessages() {
     `SELECT * FROM whatsapp_schedules WHERE status = 'pending' AND datetime(scheduled_at) <= datetime(?)`,
     [nowIso],
     async (err, rows) => {
-      if (err) {
-        db.all(`SELECT * FROM whatsapp_schedules WHERE status = 'pending'`, [], async (err2, allRows) => {
-          if (!err2 && allRows) {
-            const due = allRows.filter(r => new Date(r.scheduled_at) <= new Date());
-            for (const item of due) {
-              if (isPaused) break;
-              await dispatchSingleMessage(item);
+      let dueList = rows || [];
+      if (err || !rows) {
+        await new Promise((resolve) => {
+          db.all(`SELECT * FROM whatsapp_schedules WHERE status = 'pending'`, [], (err2, allRows) => {
+            if (!err2 && allRows) {
+              dueList = allRows.filter(r => new Date(r.scheduled_at) <= new Date());
             }
-          }
+            resolve();
+          });
         });
-        return;
       }
 
-      if (rows && rows.length > 0) {
-        console.log(`[Valdho Scheduler] Found ${rows.length} due message(s).`);
-        for (const item of rows) {
+      if (dueList && dueList.length > 0) {
+        console.log(`[Valdho Scheduler] Found ${dueList.length} due message(s).`);
+        for (const item of dueList) {
           if (isPaused) break;
+
+          // PRE-DISPATCH SAFETY CHECK: If this is a Half Form message, check if lead completed Step 2 in the meantime!
+          if (item.form_type === 'half_form' && item.email) {
+            const leadRow = await new Promise((res) => {
+              db.get('SELECT status, step2_data FROM valdho_appointments WHERE LOWER(email) = LOWER(?)', [item.email], (e, r) => res(r));
+            });
+
+            let hasStep2 = false;
+            if (leadRow) {
+              try {
+                const s2 = typeof leadRow.step2_data === 'string' ? JSON.parse(leadRow.step2_data) : (leadRow.step2_data || {});
+                if (Object.keys(s2).length > 0) hasStep2 = true;
+              } catch(e){}
+              if (leadRow.status === 'completed') hasStep2 = true;
+            }
+
+            if (hasStep2) {
+              console.log(`[Scheduler Safety] Lead ${item.email} completed Full Form! Canceling Half Form message ID ${item.id}.`);
+              cancelScheduleById(item.id);
+              continue; // DO NOT SEND HALF FORM MESSAGE!
+            }
+          }
+
           await dispatchSingleMessage(item);
         }
       }
@@ -257,6 +357,7 @@ module.exports = {
   resumeAutomation,
   getAutomationStatus,
   scheduleMessage,
+  autoScheduleLead,
   checkAndDispatchDueMessages,
   cancelSchedulesForEmail,
   cancelScheduleById,

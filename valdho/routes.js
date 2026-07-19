@@ -123,6 +123,11 @@ const webhookHandler = async (req, res) => {
     const payload = req.body;
     console.log('[Valdho Webhook Received]:', JSON.stringify(payload, null, 2));
     const result = await processValdhoWebhook(payload);
+
+    // Automatically trigger rules-based schedule (cancels Half Form if Full Form completed)
+    const formType = result.status === 'completed' ? 'full_form' : 'half_form';
+    scheduler.autoScheduleLead(result, formType).catch(e => console.error(e));
+
     res.status(200).json({ status: 'ok', message: 'Valdho webhook processed', email: result.email });
   } catch (err) {
     console.error('[Valdho Webhook Error]:', err.message);
@@ -132,6 +137,41 @@ const webhookHandler = async (req, res) => {
 
 router.post('/webhook', webhookHandler);
 router.post('/api/valdho/webhook', webhookHandler);
+
+// -------------------------------------------------------------
+// AUTO-SCHEDULER RULES API (/firstoption_agency_config/auto_rules)
+// -------------------------------------------------------------
+const DEFAULT_AUTO_RULES = {
+  half_enabled: true,
+  half_interval: '5d',
+  full_enabled: true,
+  full_interval: '1m'
+};
+
+router.get('/api/valdho/auto-rules', async (req, res) => {
+  try {
+    const saved = await firebase.getConfig('auto_rules');
+    res.json(saved ? { ...DEFAULT_AUTO_RULES, ...saved } : DEFAULT_AUTO_RULES);
+  } catch (err) {
+    res.json(DEFAULT_AUTO_RULES);
+  }
+});
+
+router.post('/api/valdho/auto-rules', async (req, res) => {
+  try {
+    const { half_enabled, half_interval, full_enabled, full_interval } = req.body;
+    const payload = {
+      half_enabled: half_enabled !== false,
+      half_interval: half_interval || '5d',
+      full_enabled: full_enabled !== false,
+      full_interval: full_interval || '1m'
+    };
+    await firebase.saveConfig('auto_rules', payload);
+    res.json({ status: 'ok', data: payload });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // -------------------------------------------------------------
 // APPOINTMENTS API

@@ -23,6 +23,11 @@
           <span id="text-toggle-automation">Pause Automation</span>
         </button>
 
+        <button class="btn" id="btn-open-rules-modal" style="background-color: #ec4899; color: white;">
+          <i data-lucide="bot" style="width: 16px; height: 16px;"></i>
+          Auto-Schedule Rules
+        </button>
+
         <button class="btn" id="btn-open-templates-modal" style="background-color: #8b5cf6; color: white;">
           <i data-lucide="settings" style="width: 16px; height: 16px;"></i>
           Edit Templates
@@ -409,6 +414,69 @@
           <button type="button" class="btn btn-secondary" id="btn-cancel-edit-sched">Cancel</button>
           <button type="submit" class="btn" style="background-color: #3b82f6; color: white;">
             Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- AUTO-SCHEDULER RULES MODAL (PERSISTED IN FIREBASE /firstoption_agency_config/auto_rules) -->
+  <div class="modal-backdrop" id="modal-rules-backdrop">
+    <div class="modal" style="max-width: 680px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="bot" style="width: 20px; height: 20px; color: #ec4899;"></i>
+          Automatic Sequence Rules (Saved in Firebase)
+        </div>
+        <button class="modal-close" id="modal-rules-close">&times;</button>
+      </div>
+      <form id="form-auto-rules">
+        <div class="modal-body">
+          <div style="margin-bottom: 16px; background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 12px; font-size: 13px; color: #9d174d;">
+            <strong>💡 Automatic Smart Follow-up Behavior:</strong><br/>
+            When a lead submits Step 1 (Half Form), the system automatically schedules their reminder. If the lead completes Step 2 (Full Form) later, the engine <strong>AUTOMATICALLY CANCELS & DELETES</strong> the Step 1 Half Form reminder so they only receive the Step 2 Full Form confirmation!
+          </div>
+
+          <!-- HALF FORM AUTO RULE -->
+          <div class="form-group" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <strong>Step 1: Half Form Auto-Followup Rule</strong>
+              <label style="font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <input type="checkbox" id="rule-half-enabled" checked /> Enable Automatic Follow-up
+              </label>
+            </div>
+            <label class="form-label" for="rule-half-interval">AUTO-SCHEDULE TIMING DELAY</label>
+            <select class="form-select" id="rule-half-interval">
+              <option value="1m">⏱️ Test Schedule (1 Minute)</option>
+              <option value="1h">⏱️ After 1 Hour</option>
+              <option value="1d">📅 After 1 Day</option>
+              <option value="5d" selected>📅 After 5 Days (Recommended)</option>
+              <option value="10d">📅 After 10 Days</option>
+            </select>
+          </div>
+
+          <!-- FULL FORM AUTO RULE -->
+          <div class="form-group" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <strong>Step 2: Full Form Confirmation Rule</strong>
+              <label style="font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <input type="checkbox" id="rule-full-enabled" checked /> Enable Automatic Confirmation
+              </label>
+            </div>
+            <label class="form-label" for="rule-full-interval">AUTO-SEND / SCHEDULE DELAY</label>
+            <select class="form-select" id="rule-full-interval">
+              <option value="now">⚡ Send Immediately Now</option>
+              <option value="1m" selected>⏱️ Test Schedule (1 Minute)</option>
+              <option value="1h">⏱️ After 1 Hour</option>
+              <option value="1d">📅 After 1 Day</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-rules">Cancel</button>
+          <button type="submit" class="btn" style="background-color: #ec4899; color: white;">
+            <i data-lucide="save" style="width: 16px; height: 16px;"></i>
+            Save Auto-Rules to Firebase
           </button>
         </div>
       </form>
