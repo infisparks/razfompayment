@@ -1,5 +1,7 @@
-// Valdho appointments page script
+// Valdho appointments & Evolution WhatsApp management script
 let valdhoAppointments = [];
+let selectedLeadForWa = null;
+let scheduledQueue = [];
 
 // Safe DOM event listener helper
 function safeAddListener(id, event, handler) {
@@ -8,6 +10,12 @@ function safeAddListener(id, event, handler) {
     el.addEventListener(event, handler);
   }
 }
+
+// Default Message Templates
+const TEMPLATES = {
+  half: (name) => `*Dear ${name || 'Valdho Lead'},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`,
+  full: (name, answers) => `*Dear ${name || 'Valdho Lead'},*\n\nYour appointment registration has been successfully received!\n\n*Details:* ${answers || 'Step 2 Completed'}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`
+};
 
 // Fetch Valdho Appointments from API
 async function fetchValdhoAppointments() {
@@ -25,7 +33,7 @@ async function fetchValdhoAppointments() {
       statusDot.style.backgroundColor = '#10b981';
       statusDot.style.boxShadow = '0 0 8px #10b981';
     }
-    if (statusText) statusText.textContent = 'Server Connected';
+    if (statusText) statusText.textContent = 'Server Active';
 
     renderValdhoTable();
     updateValdhoStats();
@@ -52,7 +60,7 @@ async function fetchValdhoAppointments() {
   }
 }
 
-// Render Valdho Appointments Table
+// Render Valdho Appointments Table with WhatsApp Action Buttons
 function renderValdhoTable() {
   const valdhoBody = document.getElementById('valdho-body');
   if (!valdhoBody) return;
@@ -90,7 +98,6 @@ function renderValdhoTable() {
     const hasStep2Data = Object.keys(step2Data).length > 0;
     const isCompleted = app.status === 'completed' || hasStep2Data;
 
-    // Extract choices from step 2 or all form data
     const choices = [];
     const targetSource = hasStep2Data ? step2Data : allData;
 
@@ -128,9 +135,13 @@ function renderValdhoTable() {
         <td data-label="Form Selections / Answers">${choicesHtml}</td>
         <td data-label="Status">${statusBadge}</td>
         <td data-label="Last Submission">${updatedDate}</td>
-        <td data-label="Action" style="text-align: right;">
-          <button class="btn btn-secondary" onclick="openValdhoDetails('${email}')">
-            Inspect Data
+        <td data-label="Actions" style="text-align: right; white-space: nowrap;">
+          <button class="btn" onclick="openWhatsAppModal('${email}')" style="background-color: #25d366; color: white; padding: 6px 12px; font-size: 13px; margin-right: 4px;">
+            <i data-lucide="message-square" style="width: 14px; height: 14px;"></i>
+            WhatsApp
+          </button>
+          <button class="btn btn-secondary" onclick="openValdhoDetails('${email}')" style="padding: 6px 12px; font-size: 13px;">
+            Inspect
           </button>
         </td>
       </tr>
@@ -168,7 +179,51 @@ function updateValdhoStats() {
   if (statValdhoStep1) statValdhoStep1.textContent = step1;
 }
 
-// Open Valdho appointment inspection modal
+// Open WhatsApp Sender & Scheduler Modal
+window.openWhatsAppModal = function(email) {
+  const app = valdhoAppointments.find(a => a.email === email);
+  if (!app) return;
+
+  selectedLeadForWa = app;
+
+  let step2Data = {};
+  try {
+    step2Data = typeof app.step2_data === 'string' ? JSON.parse(app.step2_data) : (app.step2_data || {});
+  } catch (e) {}
+
+  const isCompleted = app.status === 'completed' || Object.keys(step2Data).length > 0;
+  const name = app.name || 'Valdho Lead';
+  const phone = app.phone || 'N/A';
+  const formTypeStr = isCompleted ? 'Full Form (Completed)' : 'Half Form (Step 1 Only)';
+
+  // Set Info Headers
+  document.getElementById('wa-lead-name').textContent = name;
+  document.getElementById('wa-lead-phone').textContent = phone;
+  document.getElementById('wa-lead-email').textContent = app.email || 'N/A';
+  document.getElementById('wa-lead-type').textContent = formTypeStr;
+
+  // Extract choices summary
+  const choices = [];
+  const allData = typeof app.all_form_data === 'string' ? JSON.parse(app.all_form_data) : (app.all_form_data || {});
+  Object.keys(allData).forEach(k => {
+    if (Array.isArray(allData[k])) choices.push(...allData[k]);
+  });
+  const choicesSummary = choices.join(', ');
+
+  // Set default message text based on form type
+  const messageInput = document.getElementById('wa-message-text');
+  if (isCompleted) {
+    messageInput.value = TEMPLATES.full(name, choicesSummary);
+  } else {
+    messageInput.value = TEMPLATES.half(name);
+  }
+
+  // Show Modal
+  const modalWa = document.getElementById('modal-whatsapp-backdrop');
+  if (modalWa) modalWa.classList.add('active');
+};
+
+// Open Valdho inspection details modal
 window.openValdhoDetails = function(email) {
   const app = valdhoAppointments.find(a => a.email === email);
   if (!app) return;
@@ -206,60 +261,196 @@ window.openValdhoDetails = function(email) {
   if (modalBackdrop) modalBackdrop.classList.add('active');
 };
 
-// Close inspection modal
+// Fetch Scheduled Messages Queue
+async function fetchScheduledQueue() {
+  const queueBody = document.getElementById('queue-body');
+  try {
+    const res = await fetch('/api/valdho/whatsapp/schedules');
+    if (!res.ok) throw new Error('Failed to fetch schedules');
+
+    scheduledQueue = await res.json();
+    renderQueueTable();
+  } catch (e) {
+    console.error('Error fetching scheduled queue:', e);
+    if (queueBody) {
+      queueBody.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: #ef4444;">Failed to load queue.</td></tr>`;
+    }
+  }
+}
+
+// Render Scheduled Messages Queue
+function renderQueueTable() {
+  const queueBody = document.getElementById('queue-body');
+  if (!queueBody) return;
+
+  if (scheduledQueue.length === 0) {
+    queueBody.innerHTML = `<tr><td colspan="5" class="empty-state"><p>No scheduled WhatsApp messages in queue.</p></td></tr>`;
+    return;
+  }
+
+  queueBody.innerHTML = scheduledQueue.map(item => {
+    const isSent = item.status === 'sent';
+    const statusBadge = isSent
+      ? `<span class="badge badge-captured" style="background-color: #def7ec; color: #03543f;">Sent ✅</span>`
+      : `<span class="badge badge-pending" style="background-color: #fef3c7; color: #92400e;">Pending ⏳</span>`;
+
+    const schedDate = item.scheduled_at ? new Date(item.scheduled_at).toLocaleString('en-IN') : '-';
+
+    return `
+      <tr>
+        <td data-label="Lead / Contact"><strong>${item.lead_name || item.email}</strong></td>
+        <td data-label="Phone">${item.phone}</td>
+        <td data-label="Form Type"><span class="choice-pill">${item.form_type}</span></td>
+        <td data-label="Target Scheduled Date">${schedDate}</td>
+        <td data-label="Status">${statusBadge}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Close Modals
 function closeModal() {
-  const modalBackdrop = document.getElementById('modal-backdrop');
-  if (modalBackdrop) modalBackdrop.classList.remove('active');
+  const el = document.getElementById('modal-backdrop');
+  if (el) el.classList.remove('active');
 }
 
-// Close Integration Modal
+function closeWhatsAppModal() {
+  const el = document.getElementById('modal-whatsapp-backdrop');
+  if (el) el.classList.remove('active');
+}
+
+function closeQueueModal() {
+  const el = document.getElementById('modal-queue-backdrop');
+  if (el) el.classList.remove('active');
+}
+
 function closeIntegrationModal() {
-  const modalIntegrationBackdrop = document.getElementById('modal-integration-backdrop');
-  if (modalIntegrationBackdrop) modalIntegrationBackdrop.classList.remove('active');
+  const el = document.getElementById('modal-integration-backdrop');
+  if (el) el.classList.remove('active');
 }
 
-// Initialize on DOM load
+// DOM Setup
 document.addEventListener('DOMContentLoaded', () => {
+  // Details Modal
   safeAddListener('modal-close', 'click', closeModal);
   safeAddListener('modal-btn-close', 'click', closeModal);
 
-  const modalBackdrop = document.getElementById('modal-backdrop');
-  if (modalBackdrop) {
-    modalBackdrop.addEventListener('click', (e) => {
-      if (e.target === modalBackdrop) closeModal();
+  // WhatsApp Modal Close
+  safeAddListener('modal-whatsapp-close', 'click', closeWhatsAppModal);
+  safeAddListener('btn-cancel-whatsapp', 'click', closeWhatsAppModal);
+
+  // Queue Modal
+  safeAddListener('btn-open-scheduled-modal', 'click', () => {
+    document.getElementById('modal-queue-backdrop').classList.add('active');
+    fetchScheduledQueue();
+  });
+  safeAddListener('modal-queue-close', 'click', closeQueueModal);
+  safeAddListener('btn-close-queue', 'click', closeQueueModal);
+
+  // Refresh
+  safeAddListener('btn-refresh-valdho', 'click', fetchValdhoAppointments);
+
+  // Template switch buttons
+  safeAddListener('btn-tmpl-half', 'click', () => {
+    if (selectedLeadForWa) {
+      document.getElementById('wa-message-text').value = TEMPLATES.half(selectedLeadForWa.name);
+    }
+  });
+
+  safeAddListener('btn-tmpl-full', 'click', () => {
+    if (selectedLeadForWa) {
+      document.getElementById('wa-message-text').value = TEMPLATES.full(selectedLeadForWa.name, 'Step 2 Completed');
+    }
+  });
+
+  // Schedule mode toggle (show custom date field if chosen)
+  const modeSelect = document.getElementById('wa-schedule-mode');
+  if (modeSelect) {
+    modeSelect.addEventListener('change', (e) => {
+      const customGroup = document.getElementById('group-custom-date');
+      if (customGroup) {
+        customGroup.style.display = e.target.value === 'custom' ? 'block' : 'none';
+      }
     });
   }
 
-  safeAddListener('btn-refresh-valdho', 'click', fetchValdhoAppointments);
+  // Handle WhatsApp Form Submit
+  const formWa = document.getElementById('form-whatsapp');
+  if (formWa) {
+    formWa.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!selectedLeadForWa) return;
 
+      const messageText = document.getElementById('wa-message-text').value;
+      const scheduleMode = document.getElementById('wa-schedule-mode').value;
+      const customDateVal = document.getElementById('wa-custom-date').value;
+
+      let isCompleted = selectedLeadForWa.status === 'completed';
+      const formType = isCompleted ? 'full_form' : 'half_form';
+
+      if (scheduleMode === 'now') {
+        // Send Immediately
+        try {
+          const res = await fetch('/api/valdho/whatsapp/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone: selectedLeadForWa.phone,
+              text: messageText
+            })
+          });
+
+          const data = await res.json();
+          if (data.success) {
+            alert(`WhatsApp message sent successfully to ${selectedLeadForWa.phone}!`);
+          } else {
+            alert(`WhatsApp send result: ${JSON.stringify(data)}`);
+          }
+        } catch (err) {
+          alert(`Failed to send WhatsApp message: ${err.message}`);
+        }
+      } else {
+        // Schedule for Future (5_days, 10_days, or custom)
+        let days_delay = null;
+        let scheduled_at = null;
+
+        if (scheduleMode === '5_days') days_delay = 5;
+        else if (scheduleMode === '10_days') days_delay = 10;
+        else if (scheduleMode === 'custom') scheduled_at = customDateVal;
+
+        try {
+          const res = await fetch('/api/valdho/whatsapp/schedule', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: selectedLeadForWa.email,
+              phone: selectedLeadForWa.phone,
+              lead_name: selectedLeadForWa.name,
+              form_type: formType,
+              message_text: messageText,
+              days_delay,
+              scheduled_at
+            })
+          });
+
+          const data = await res.json();
+          alert(`WhatsApp message scheduled successfully!\n\nTarget Delivery: ${scheduleMode === '5_days' ? 'After 5 Days' : (scheduleMode === '10_days' ? 'After 10 Days' : scheduled_at)}`);
+        } catch (err) {
+          alert(`Failed to schedule WhatsApp message: ${err.message}`);
+        }
+      }
+
+      closeWhatsAppModal();
+    });
+  }
+
+  // Add Integration Modal
   safeAddListener('btn-open-integration-modal', 'click', () => {
-    const modalIntegrationBackdrop = document.getElementById('modal-integration-backdrop');
-    if (modalIntegrationBackdrop) modalIntegrationBackdrop.classList.add('active');
+    document.getElementById('modal-integration-backdrop').classList.add('active');
   });
 
   safeAddListener('modal-integration-close', 'click', closeIntegrationModal);
   safeAddListener('btn-cancel-integration', 'click', closeIntegrationModal);
-
-  const modalIntegrationBackdrop = document.getElementById('modal-integration-backdrop');
-  if (modalIntegrationBackdrop) {
-    modalIntegrationBackdrop.addEventListener('click', (e) => {
-      if (e.target === modalIntegrationBackdrop) closeIntegrationModal();
-    });
-  }
-
-  const formAddIntegration = document.getElementById('form-add-integration');
-  if (formAddIntegration) {
-    formAddIntegration.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const name = document.getElementById('integration-name').value;
-      const url = document.getElementById('integration-url').value;
-      const method = document.getElementById('integration-method').value;
-
-      alert(`Integration "${name}" added successfully!\n\nWebhook Endpoint: ${url}\nMethod: ${method}`);
-      closeIntegrationModal();
-      fetchValdhoAppointments();
-    });
-  }
 
   fetchValdhoAppointments();
 });

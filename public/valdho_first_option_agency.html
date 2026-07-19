@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>valdho_first_option_agency - Webhook Dashboard</title>
+  <title>valdho_first_option_agency - Webhook & WhatsApp Follow-up Dashboard</title>
   <link rel="stylesheet" href="style.css">
   <!-- Load Lucide icons for UI symbols -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -14,9 +14,13 @@
     <header>
       <div>
         <h1 id="page-title">valdho_first_option_agency</h1>
-        <div class="subtitle" id="page-subtitle">Real-time appointment webhook tracking stored under Firebase node /firstoption_agency</div>
+        <div class="subtitle" id="page-subtitle">Real-time appointment webhooks & Evolution WhatsApp scheduling engine</div>
       </div>
       <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <button class="btn" id="btn-open-scheduled-modal" style="background-color: #059669; color: white;">
+          <i data-lucide="clock" style="width: 16px; height: 16px;"></i>
+          Scheduled Messages Queue
+        </button>
         <button class="btn" id="btn-open-integration-modal" style="background-color: #1e1b4b; color: white;">
           <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
           Add New Integration
@@ -49,7 +53,7 @@
           <div class="stat-value" id="stat-valdho-total">0</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Completed 2-Step</div>
+          <div class="stat-label">Completed 2-Step (Full Form)</div>
           <div class="stat-value" id="stat-valdho-completed" style="color: #059669;">0</div>
         </div>
         <div class="stat-card">
@@ -84,7 +88,7 @@
                 <th>Form Selections / Answers</th>
                 <th>Status</th>
                 <th>Last Submission</th>
-                <th style="text-align: right;">Action</th>
+                <th style="text-align: right;">Actions</th>
               </tr>
             </thead>
             <tbody id="valdho-body">
@@ -134,6 +138,112 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" id="modal-btn-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WHATSAPP MESSAGE & SCHEDULER MODAL -->
+  <div class="modal-backdrop" id="modal-whatsapp-backdrop">
+    <div class="modal" style="max-width: 650px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="send" style="width: 20px; height: 20px; color: #25d366;"></i>
+          Send / Schedule WhatsApp Message
+        </div>
+        <button class="modal-close" id="modal-whatsapp-close">&times;</button>
+      </div>
+      <form id="form-whatsapp">
+        <div class="modal-body">
+          <div style="margin-bottom: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+            <div><strong>Lead Name:</strong> <span id="wa-lead-name">-</span></div>
+            <div><strong>Phone Number:</strong> <span id="wa-lead-phone">-</span></div>
+            <div><strong>Email:</strong> <span id="wa-lead-email">-</span></div>
+            <div><strong>Form Type:</strong> <span id="wa-lead-type">-</span></div>
+          </div>
+
+          <!-- Template Preset Quick Selector -->
+          <div class="form-group">
+            <label class="form-label">TEMPLATE PRESET</label>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn btn-secondary" id="btn-tmpl-half" style="font-size: 12px; padding: 6px 12px;">
+                Half Form Reminder (Step 1)
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-tmpl-full" style="font-size: 12px; padding: 6px 12px;">
+                Full Form Confirmation (Step 2)
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="wa-message-text">MESSAGE TEXT <span style="color: #ef4444;">*</span></label>
+            <textarea class="form-input" id="wa-message-text" rows="6" placeholder="Type WhatsApp message here... (Use {name}, {phone}, {email}, {answers})" required></textarea>
+            <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+              Placeholders: <code>{name}</code>, <code>{phone}</code>, <code>{email}</code>, <code>{answers}</code>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="wa-schedule-mode">SEND TIMING / SCHEDULE <span style="color: #ef4444;">*</span></label>
+            <select class="form-select" id="wa-schedule-mode">
+              <option value="now" selected>⚡ Send Immediately Now</option>
+              <option value="5_days">📅 Schedule Follow-up After 5 Days</option>
+              <option value="10_days">📅 Schedule Follow-up After 10 Days</option>
+              <option value="custom">🗓️ Pick Specific Date & Time</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="group-custom-date" style="display: none;">
+            <label class="form-label" for="wa-custom-date">TARGET SCHEDULE DATE & TIME</label>
+            <input type="datetime-local" class="form-input" id="wa-custom-date" />
+          </div>
+        </div>
+
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-whatsapp">Cancel</button>
+          <button type="submit" class="btn" style="background-color: #25d366; color: white;">
+            <i data-lucide="send" style="width: 16px; height: 16px;"></i>
+            Submit Message
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SCHEDULED MESSAGES QUEUE MODAL -->
+  <div class="modal-backdrop" id="modal-queue-backdrop">
+    <div class="modal" style="max-width: 800px;">
+      <div class="modal-header">
+        <div class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="clock" style="width: 20px; height: 20px; color: #059669;"></i>
+          Scheduled WhatsApp Follow-up Queue
+        </div>
+        <button class="modal-close" id="modal-queue-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Lead / Contact</th>
+                <th>Phone</th>
+                <th>Form Type</th>
+                <th>Target Scheduled Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="queue-body">
+              <tr>
+                <td colspan="5" class="empty-state">
+                  <i data-lucide="loader" class="spin" style="width: 24px; height: 24px;"></i>
+                  <p>Loading scheduled queue...</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-close-queue">Close</button>
       </div>
     </div>
   </div>

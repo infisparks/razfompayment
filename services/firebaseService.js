@@ -254,10 +254,138 @@ async function getValdhoAppointments() {
   }
 }
 
+/**
+ * Save or update a scheduled WhatsApp message in Firebase under `/firstoption_agency_schedules/{scheduleId}`
+ */
+async function saveValdhoSchedule(scheduleData) {
+  if (!scheduleData || !scheduleData.id) {
+    scheduleData.id = 'sched_' + Date.now();
+  }
+
+  const schedId = scheduleData.id;
+  const nodePath = `firstoption_agency_schedules/${schedId}`;
+  const payload = {
+    ...scheduleData,
+    updated_at: new Date().toISOString()
+  };
+
+  if (adminApp) {
+    try {
+      const db = adminApp.database();
+      await db.ref(nodePath).set(payload);
+      console.log(`[Firebase Admin] Schedule ${schedId} saved under /${nodePath}`);
+      return { success: true, method: 'admin_sdk' };
+    } catch (err) {
+      console.error(`[Firebase Admin Error] Failed to save schedule ${schedId}:`, err.message);
+    }
+  }
+
+  try {
+    const targetUrl = `${databaseUrl}/${nodePath}.json`;
+    await axios.put(targetUrl, payload);
+    console.log(`[Firebase REST API] Schedule ${schedId} saved under /${nodePath}`);
+    return { success: true, method: 'rest_api' };
+  } catch (err) {
+    console.error(`[Firebase REST Error] Failed to save schedule ${schedId}:`, err.message || err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Fetch all scheduled messages under `/firstoption_agency_schedules`
+ */
+async function getValdhoSchedules() {
+  const nodePath = `firstoption_agency_schedules`;
+
+  if (adminApp) {
+    try {
+      const db = adminApp.database();
+      const snapshot = await db.ref(nodePath).once('value');
+      const val = snapshot.val();
+      return val ? Object.values(val) : [];
+    } catch (err) {
+      console.error('[Firebase Admin Error] Failed to fetch Valdho schedules:', err.message);
+    }
+  }
+
+  try {
+    const targetUrl = `${databaseUrl}/${nodePath}.json`;
+    const response = await axios.get(targetUrl);
+    const data = response.data;
+    return data ? Object.values(data) : [];
+  } catch (err) {
+    console.error('[Firebase REST Error] Failed to fetch Valdho schedules:', err.message || err);
+    return [];
+  }
+}
+
+/**
+ * Delete Valdho appointment from Firebase under `/firstoption_agency/{emailKey}`
+ */
+async function deleteValdhoAppointment(email) {
+  if (!email) return { success: false, error: 'Missing email' };
+  const emailKey = email.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const nodePath = `firstoption_agency/${emailKey}`;
+
+  if (adminApp) {
+    try {
+      const db = adminApp.database();
+      await db.ref(nodePath).remove();
+      console.log(`[Firebase Admin] Deleted appointment under /${nodePath}`);
+      return { success: true };
+    } catch (err) {
+      console.error(`[Firebase Admin Error] Failed to delete appointment:`, err.message);
+    }
+  }
+
+  try {
+    const targetUrl = `${databaseUrl}/${nodePath}.json`;
+    await axios.delete(targetUrl);
+    console.log(`[Firebase REST API] Deleted appointment under /${nodePath}`);
+    return { success: true };
+  } catch (err) {
+    console.error(`[Firebase REST Error] Failed to delete appointment:`, err.message || err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Delete or cancel schedule from Firebase under `/firstoption_agency_schedules/{scheduleId}`
+ */
+async function deleteValdhoSchedule(schedId) {
+  if (!schedId) return { success: false, error: 'Missing schedule id' };
+  const nodePath = `firstoption_agency_schedules/${schedId}`;
+
+  if (adminApp) {
+    try {
+      const db = adminApp.database();
+      await db.ref(nodePath).remove();
+      console.log(`[Firebase Admin] Deleted schedule under /${nodePath}`);
+      return { success: true };
+    } catch (err) {
+      console.error(`[Firebase Admin Error] Failed to delete schedule:`, err.message);
+    }
+  }
+
+  try {
+    const targetUrl = `${databaseUrl}/${nodePath}.json`;
+    await axios.delete(targetUrl);
+    console.log(`[Firebase REST API] Deleted schedule under /${nodePath}`);
+    return { success: true };
+  } catch (err) {
+    console.error(`[Firebase REST Error] Failed to delete schedule:`, err.message || err);
+    return { success: false, error: err.message };
+  }
+}
+
 module.exports = {
   savePayment,
   saveWhatsAppLog,
   getAllPayments,
   saveValdhoAppointment,
-  getValdhoAppointments
+  getValdhoAppointments,
+  deleteValdhoAppointment,
+  saveValdhoSchedule,
+  getValdhoSchedules,
+  deleteValdhoSchedule
 };

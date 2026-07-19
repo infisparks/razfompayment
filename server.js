@@ -7,6 +7,8 @@ const db = require('./db');
 const whatsappService = require('./services/whatsappService');
 const whatsappWebhookService = require('./services/whatsappWebhookService');
 const firebaseService = require('./services/firebaseService');
+const evolutionWhatsappService = require('./services/evolutionWhatsappService');
+const schedulerService = require('./services/schedulerService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -412,9 +414,80 @@ app.get('/api/valdho/appointments', async (req, res) => {
   }
 });
 
-// Start server
+// POST route to send instant WhatsApp message via Evolution API
+app.post('/api/valdho/whatsapp/send', async (req, res) => {
+  try {
+    const { phone, text } = req.body;
+    if (!phone || !text) {
+      return res.status(400).json({ error: 'Phone number and message text are required' });
+    }
+
+    const result = await evolutionWhatsappService.sendEvolutionWhatsApp(phone, text);
+    res.status(result.success ? 200 : 400).json(result);
+  } catch (err) {
+    console.error('Error in /api/valdho/whatsapp/send:', err);
+    res.status(500).json({ error: err.message || 'Failed to send WhatsApp message' });
+  }
+});
+
+// POST route to schedule a WhatsApp message (e.g. after 5 days, 10 days, or on a specific date)
+app.post('/api/valdho/whatsapp/schedule', async (req, res) => {
+  try {
+    const { email, phone, lead_name, form_type, message_text, scheduled_at, days_delay } = req.body;
+
+    if (!phone || !message_text) {
+      return res.status(400).json({ error: 'Phone number and message text are required' });
+    }
+
+    let targetDate;
+    if (days_delay && !isNaN(days_delay)) {
+      targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + parseInt(days_delay));
+    } else if (scheduled_at) {
+      targetDate = new Date(scheduled_at);
+    } else {
+      // Default fallback: 1 day
+      targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + 1);
+    }
+
+    const record = await schedulerService.scheduleMessage({
+      email,
+      phone,
+      lead_name,
+      form_type: form_type || 'half_form',
+      message_text,
+      scheduled_at: targetDate
+    });
+
+    res.status(200).json({ status: 'ok', message: 'WhatsApp message scheduled successfully', data: record });
+  } catch (err) {
+    console.error('Error in /api/valdho/whatsapp/schedule:', err);
+    res.status(500).json({ error: err.message || 'Failed to schedule WhatsApp message' });
+  }
+});
+
+// GET route to list all scheduled WhatsApp messages
+app.get('/api/valdho/whatsapp/schedules', async (req, res) => {
+  db.all('SELECT * FROM whatsapp_schedules ORDER BY id DESC', [], async (err, rows) => {
+    if (err || !rows || rows.length === 0) {
+      try {
+        const fbSchedules = await firebaseService.getValdhoSchedules();
+        return res.json(fbSchedules);
+      } catch (fbErr) {
+        return res.json(rows || []);
+      }
+    }
+    res.json(rows);
+  });
+});
+
+// Start server and initialize background scheduler engine
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Webhook URL should be configured as: https://raz.infiplus.in/webhook`);
   console.log(`Valdho Webhook URL endpoint: https://raz.infiplus.in/valdho/webhook`);
+  
+  // Start background scheduler worker
+  schedulerService.startScheduler();
 });

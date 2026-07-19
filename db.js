@@ -73,6 +73,29 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 console.error('Error creating valdho_appointments table:', valdhoTableErr.message);
               } else {
                 console.log('valdho_appointments table ready.');
+
+                // Create whatsapp_schedules table if it doesn't exist
+                db.run(`
+                  CREATE TABLE IF NOT EXISTS whatsapp_schedules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT,
+                    phone TEXT,
+                    lead_name TEXT,
+                    form_type TEXT,
+                    message_text TEXT,
+                    scheduled_at DATETIME,
+                    status TEXT DEFAULT 'pending',
+                    error_message TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    sent_at DATETIME
+                  )
+                `, (schedTableErr) => {
+                  if (schedTableErr) {
+                    console.error('Error creating whatsapp_schedules table:', schedTableErr.message);
+                  } else {
+                    console.log('whatsapp_schedules table ready.');
+                  }
+                });
               }
             });
           }
