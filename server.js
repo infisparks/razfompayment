@@ -361,19 +361,49 @@ app.post('/webhook/valdho_first_option_agency', valdhoWebhookHandler);
 
 // GET API route for Valdho Appointments
 app.get('/api/valdho/appointments', async (req, res) => {
-  const query = 'SELECT * FROM valdho_appointments ORDER BY updated_at DESC';
-  db.all(query, [], async (err, rows) => {
-    if (err || !rows || rows.length === 0) {
-      // Fallback to Firebase if local DB is empty
-      try {
-        const fbAppointments = await firebaseService.getValdhoAppointments();
-        return res.json(fbAppointments);
-      } catch (fbErr) {
-        return res.json(rows || []);
-      }
-    }
-    res.json(rows);
-  });
+  try {
+    // 1. Fetch directly from Firebase under node /firstoption_agency
+    const fbAppointments = await firebaseService.getValdhoAppointments();
+
+    // 2. Fetch from SQLite
+    db.all('SELECT * FROM valdho_appointments ORDER BY updated_at DESC', [], (err, rows) => {
+      const dbAppointments = rows || [];
+      const map = new Map();
+
+      // Add SQLite records
+      dbAppointments.forEach(row => {
+        let step1_data = {}, step2_data = {}, all_form_data = {};
+        try { step1_data = typeof row.step1_data === 'string' ? JSON.parse(row.step1_data) : (row.step1_data || {}); } catch(e){}
+        try { step2_data = typeof row.step2_data === 'string' ? JSON.parse(row.step2_data) : (row.step2_data || {}); } catch(e){}
+        try { all_form_data = typeof row.all_form_data === 'string' ? JSON.parse(row.all_form_data) : (row.all_form_data || {}); } catch(e){}
+
+        map.set(row.email.toLowerCase(), {
+          ...row,
+          step1_data,
+          step2_data,
+          all_form_data
+        });
+      });
+
+      // Add / override with Firebase records
+      (fbAppointments || []).forEach(fbItem => {
+        if (fbItem && (fbItem.email || fbItem.id)) {
+          const emailKey = (fbItem.email || fbItem.id).toLowerCase();
+          const existing = map.get(emailKey) || {};
+          map.set(emailKey, {
+            ...existing,
+            ...fbItem
+          });
+        }
+      });
+
+      const resultList = Array.from(map.values());
+      res.json(resultList);
+    });
+  } catch (error) {
+    console.error('Error fetching Valdho appointments:', error);
+    res.status(500).json({ error: 'Failed to fetch appointments' });
+  }
 });
 
 // Start server
