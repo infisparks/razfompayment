@@ -1,6 +1,7 @@
 const db = require('../db');
 const firebase = require('./firebase');
 const whatsapp = require('./whatsapp');
+const config = require('./config');
 
 let schedulerTimer = null;
 let isPaused = false; // Automation Pause/Resume state
@@ -290,6 +291,19 @@ async function dispatchSingleMessage(item) {
   );
 
   firebase.saveMessageLog(logData).catch(e => console.error(e));
+
+  // 3. Automatically schedule the NEXT repeat message after config.INTERVAL_MINUTES (e.g. 5 minutes)
+  if (result.success && config.ENABLE_REPEAT_SEQUENCE && item.email) {
+    console.log(`[Valdho Scheduler] Scheduling next repeat message for ${item.email} in ${config.INTERVAL_MINUTES} minutes...`);
+    scheduleMessage({
+      email: item.email,
+      phone: item.phone,
+      lead_name: item.lead_name,
+      form_type: item.form_type,
+      message_text: item.message_text,
+      interval: `${config.INTERVAL_MINUTES}m`
+    }).catch(e => console.error('[Valdho Scheduler] Error scheduling repeat sequence:', e));
+  }
 }
 
 /**
