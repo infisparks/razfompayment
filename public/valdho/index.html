@@ -90,13 +90,14 @@
                 <th>Phone Number</th>
                 <th>Form Selections / Answers</th>
                 <th>Status</th>
+                <th>Next 5-Min Message Countdown</th>
                 <th>Last Submission</th>
                 <th style="text-align: right;">Actions</th>
               </tr>
             </thead>
             <tbody id="valdho-body">
               <tr>
-                <td colspan="6" class="empty-state">
+                <td colspan="7" class="empty-state">
                   <i data-lucide="loader" class="spin" style="width: 24px; height: 24px;"></i>
                   <p>Loading Valdho appointments...</p>
                 </td>
@@ -133,76 +134,6 @@
     </div>
   </div>
 
-  <!-- WHATSAPP SENDER & SCHEDULER MODAL -->
-  <div class="modal-backdrop" id="modal-whatsapp-backdrop">
-    <div class="modal" style="max-width: 650px;">
-      <div class="modal-header">
-        <div class="modal-title" style="display: flex; align-items: center; gap: 8px;">
-          <i data-lucide="send" style="width: 20px; height: 20px; color: #25d366;"></i>
-          Send / Schedule WhatsApp Message
-        </div>
-        <button class="modal-close" id="modal-whatsapp-close">&times;</button>
-      </div>
-      <form id="form-whatsapp">
-        <div class="modal-body">
-          <div style="margin-bottom: 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
-            <div><strong>Lead Name:</strong> <span id="wa-lead-name">-</span></div>
-            <div><strong>Phone Number:</strong> <span id="wa-lead-phone">-</span></div>
-            <div><strong>Email:</strong> <span id="wa-lead-email">-</span></div>
-            <div><strong>Form Type:</strong> <span id="wa-lead-type">-</span></div>
-          </div>
-
-          <!-- Template Preset Quick Selector -->
-          <div class="form-group">
-            <label class="form-label">TEMPLATE PRESETS</label>
-            <div style="display: flex; gap: 8px;">
-              <button type="button" class="btn btn-secondary" id="btn-tmpl-half" style="font-size: 12px; padding: 6px 12px;">
-                Half Form Reminder (Step 1)
-              </button>
-              <button type="button" class="btn btn-secondary" id="btn-tmpl-full" style="font-size: 12px; padding: 6px 12px;">
-                Full Form Confirmation (Step 2)
-              </button>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="wa-message-text">MESSAGE TEXT <span style="color: #ef4444;">*</span></label>
-            <textarea class="form-input" id="wa-message-text" rows="6" placeholder="Type WhatsApp message here... (Use {name}, {phone}, {email}, {answers})" required></textarea>
-            <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
-              Placeholders: <code>{name}</code>, <code>{phone}</code>, <code>{email}</code>, <code>{answers}</code>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="wa-schedule-mode">SEND TIMING / REPEAT INTERVAL <span style="color: #ef4444;">*</span></label>
-            <select class="form-select" id="wa-schedule-mode">
-              <option value="now" selected>⚡ Send Immediately Now</option>
-              <option value="1m">⏱️ Test Schedule (1 Minute)</option>
-              <option value="1h">⏱️ Repeat / Send Every 1 Hour</option>
-              <option value="1d">📅 Send After 1 Day</option>
-              <option value="5d">📅 Send After 5 Days</option>
-              <option value="10d">📅 Send After 10 Days</option>
-              <option value="custom">🗓️ Pick Specific Date & Time</option>
-            </select>
-          </div>
-
-          <div class="form-group" id="group-custom-date" style="display: none;">
-            <label class="form-label" for="wa-custom-date">TARGET SCHEDULE DATE & TIME</label>
-            <input type="datetime-local" class="form-input" id="wa-custom-date" />
-          </div>
-        </div>
-
-        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
-          <button type="button" class="btn btn-secondary" id="btn-cancel-whatsapp">Cancel</button>
-          <button type="submit" class="btn" style="background-color: #25d366; color: white;">
-            <i data-lucide="send" style="width: 16px; height: 16px;"></i>
-            Submit Message
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <!-- SCHEDULED MESSAGES QUEUE MODAL -->
   <div class="modal-backdrop" id="modal-queue-backdrop">
     <div class="modal" style="max-width: 850px;">
@@ -229,7 +160,7 @@
             </thead>
             <tbody id="queue-body">
               <tr>
-                <td colspan="6" class="empty-state">
+                <td colspan="7" class="empty-state">
                   <i data-lucide="loader" class="spin" style="width: 24px; height: 24px;"></i>
                   <p>Loading scheduled queue...</p>
                 </td>
@@ -280,142 +211,6 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="btn-close-logs">Close</button>
       </div>
-    </div>
-  </div>
-
-  <!-- ADD INTEGRATION MODAL -->
-  <div class="modal-backdrop" id="modal-integration-backdrop">
-    <div class="modal" style="max-width: 600px;">
-      <div class="modal-header">
-        <div class="modal-title">Add New Integration</div>
-        <button class="modal-close" id="modal-integration-close">&times;</button>
-      </div>
-      <form id="form-add-integration">
-        <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label" for="integration-name">Name <span style="color: #ef4444;">*</span></label>
-            <input type="text" class="form-input" id="integration-name" value="valdho_first_option_agency" placeholder="Enter Integration name" required />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-url">WEBHOOK URL <span style="color: #ef4444;">*</span></label>
-            <input type="url" class="form-input" id="integration-url" value="https://raz.infiplus.in/valdho/webhook" placeholder="Enter your webhook endpoint URL" required />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-method">HTTP METHOD <span style="color: #ef4444;">*</span></label>
-            <select class="form-select" id="integration-method" required>
-              <option value="POST" selected>POST</option>
-              <option value="GET">GET</option>
-              <option value="PUT">PUT</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-auth">AUTHORIZATION HEADER</label>
-            <input type="text" class="form-input" id="integration-auth" placeholder="Bearer token or API key (optional)" />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="integration-headers">CUSTOM HEADERS</label>
-            <textarea class="form-input" id="integration-headers" rows="3" placeholder='Additional headers as JSON (optional)'></textarea>
-          </div>
-        </div>
-        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px;">
-          <button type="button" class="btn btn-secondary" id="btn-cancel-integration">Cancel</button>
-          <button type="submit" class="btn" style="background-color: #1e1b4b; color: white;">Add New Integration</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- UNIFIED GLOBAL AUTOMATION WORKFLOW RIGHT SLIDE-OVER DRAWER (PERSISTED IN FIREBASE /firstoption_agency_config/global_workflow) -->
-  <div class="drawer-backdrop" id="drawer-workflow-backdrop">
-    <div class="drawer">
-      <div class="drawer-header">
-        <div class="drawer-title" style="display: flex; align-items: center; gap: 8px;">
-          <i data-lucide="zap" style="width: 22px; height: 22px; color: #8b5cf6;"></i>
-          Global Automation Setup
-        </div>
-        <button class="drawer-close" id="drawer-workflow-close">&times;</button>
-      </div>
-      <form id="form-global-workflow" style="display: flex; flex-direction: column; height: 100%;">
-        <div class="drawer-body">
-          <div style="margin-bottom: 20px; background-color: #f3e8ff; border: 1px solid #d8b4fe; border-radius: 10px; padding: 14px; font-size: 13px; color: #6b21a8; line-height: 1.5;">
-            <strong>⚡ Continuous Global Automation Workflow:</strong><br/>
-            Set your sequence rules and message templates once. When a lead submits Step 1 (Half Form), their reminder is auto-scheduled. If they complete Step 2 (Full Form), all Step 1 Half Form reminders are <strong>AUTOMATICALLY CANCELLED & REMOVED</strong>.
-          </div>
-
-          <!-- STEP 1: HALF FORM WORKFLOW -->
-          <div class="form-group" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <strong style="font-size: 15px; color: #d97706;">Step 1: Half Form Follow-up Rule</strong>
-              <label style="font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                <input type="checkbox" id="wf-half-enabled" checked /> Enabled
-              </label>
-            </div>
-
-            <div style="margin-bottom: 12px;">
-              <label class="form-label" for="wf-half-interval">AUTO-SCHEDULE TIMING DELAY</label>
-              <select class="form-select" id="wf-half-interval">
-                <option value="1m">⏱️ Test Schedule (1 Minute)</option>
-                <option value="1h">⏱️ After 1 Hour</option>
-                <option value="1d">📅 After 1 Day</option>
-                <option value="5d" selected>📅 After 5 Days (Recommended)</option>
-                <option value="7d">📅 After 7 Days</option>
-                <option value="10d">📅 After 10 Days</option>
-                <option value="30d">📅 After 30 Days</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="form-label" for="wf-half-message">STEP 1 MESSAGE TEMPLATE</label>
-              <textarea class="form-input" id="wf-half-message" rows="5" placeholder="Enter message text for Step 1 leads..." required></textarea>
-              <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">
-                Placeholders: <code>{name}</code>, <code>{phone}</code>, <code>{email}</code>
-              </div>
-            </div>
-          </div>
-
-          <!-- STEP 2: FULL FORM WORKFLOW -->
-          <div class="form-group" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <strong style="font-size: 15px; color: #059669;">Step 2: Full Form Confirmation Rule</strong>
-              <label style="font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                <input type="checkbox" id="wf-full-enabled" checked /> Enabled
-              </label>
-            </div>
-
-            <div style="margin-bottom: 12px;">
-              <label class="form-label" for="wf-full-interval">AUTO-SEND / SCHEDULE TIMING DELAY</label>
-              <select class="form-select" id="wf-full-interval">
-                <option value="now">⚡ Send Immediately Now</option>
-                <option value="1m" selected>⏱️ Test Schedule (1 Minute)</option>
-                <option value="1h">⏱️ After 1 Hour</option>
-                <option value="1d">📅 After 1 Day</option>
-                <option value="7d">📅 After 7 Days</option>
-                <option value="10d">📅 After 10 Days</option>
-                <option value="30d">📅 After 30 Days</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="form-label" for="wf-full-message">STEP 2 MESSAGE TEMPLATE</label>
-              <textarea class="form-input" id="wf-full-message" rows="5" placeholder="Enter message text for Step 2 completed leads..." required></textarea>
-              <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">
-                Placeholders: <code>{name}</code>, <code>{phone}</code>, <code>{email}</code>, <code>{answers}</code>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="drawer-footer">
-          <button type="button" class="btn btn-secondary" id="btn-cancel-workflow">Cancel</button>
-          <button type="submit" class="btn" style="background-color: #8b5cf6; color: white;">
-            <i data-lucide="save" style="width: 16px; height: 16px;"></i>
-            Save Global Workflow to Firebase
-          </button>
-        </div>
-      </form>
     </div>
   </div>
 
