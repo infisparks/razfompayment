@@ -527,22 +527,39 @@ function closeQueueModal() {
   document.getElementById('modal-queue-backdrop').classList.remove('active');
   if (countdownTimerInterval) clearInterval(countdownTimerInterval);
 }
-function closeWorkflowModal() { document.getElementById('modal-workflow-backdrop').classList.remove('active'); }
+function closeWorkflowModal() {
+  const modal = document.getElementById('modal-workflow-backdrop');
+  if (modal) modal.classList.remove('active');
+}
+
+window.openWorkflowModal = function() {
+  const modal = document.getElementById('modal-workflow-backdrop');
+  if (modal) {
+    modal.classList.add('active');
+  }
+  fetchGlobalWorkflow();
+};
 
 async function fetchGlobalWorkflow() {
+  const defaultHalfMsg = `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`;
+  const defaultFullMsg = `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`;
+
   try {
     const res = await fetch('/api/valdho/global-workflow');
     if (res.ok) {
       const wf = await res.json();
-      document.getElementById('wf-half-enabled').checked = wf.half_enabled !== false;
-      document.getElementById('wf-half-interval').value = wf.half_interval || '5d';
-      document.getElementById('wf-half-message').value = wf.half_message || '';
+      if (document.getElementById('wf-half-enabled')) document.getElementById('wf-half-enabled').checked = wf.half_enabled !== false;
+      if (document.getElementById('wf-half-interval')) document.getElementById('wf-half-interval').value = wf.half_interval || '5d';
+      if (document.getElementById('wf-half-message')) document.getElementById('wf-half-message').value = wf.half_message || defaultHalfMsg;
 
-      document.getElementById('wf-full-enabled').checked = wf.full_enabled !== false;
-      document.getElementById('wf-full-interval').value = wf.full_interval || '1m';
-      document.getElementById('wf-full-message').value = wf.full_message || '';
+      if (document.getElementById('wf-full-enabled')) document.getElementById('wf-full-enabled').checked = wf.full_enabled !== false;
+      if (document.getElementById('wf-full-interval')) document.getElementById('wf-full-interval').value = wf.full_interval || '1m';
+      if (document.getElementById('wf-full-message')) document.getElementById('wf-full-message').value = wf.full_message || defaultFullMsg;
     }
-  } catch (e) {}
+  } catch (e) {
+    if (document.getElementById('wf-half-message')) document.getElementById('wf-half-message').value = defaultHalfMsg;
+    if (document.getElementById('wf-full-message')) document.getElementById('wf-full-message').value = defaultFullMsg;
+  }
 }
 
 // DOM Initialization
