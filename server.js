@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const whatsappService = require('./services/whatsappService');
 const whatsappWebhookService = require('./services/whatsappWebhookService');
+const firebaseService = require('./services/firebaseService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,7 +30,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date() });
 });
 
-// API endpoint to fetch all stored payments
+// API endpoint to fetch all stored payments from SQLite
 app.get('/api/payments', (req, res) => {
   const query = 'SELECT * FROM payments ORDER BY received_at DESC';
   db.all(query, [], (err, rows) => {
@@ -39,6 +40,17 @@ app.get('/api/payments', (req, res) => {
     }
     res.json(rows);
   });
+});
+
+// API endpoint to fetch all payments directly from Firebase under /razorpay/payments
+app.get('/api/firebase/payments', async (req, res) => {
+  try {
+    const payments = await firebaseService.getAllPayments();
+    res.json(payments);
+  } catch (err) {
+    console.error('Error fetching payments from Firebase:', err.message);
+    res.status(500).json({ error: 'Failed to fetch Firebase payments' });
+  }
 });
 
 // POST route to handle Razorpay Webhooks
@@ -89,6 +101,26 @@ app.post('/webhook', (req, res) => {
         company_name = payment.notes[companyKey];
       }
     }
+
+    // Prepare payment object for Firebase under /razorpay/payments/{payment_id}
+    const paymentData = {
+      payment_id,
+      amount,
+      currency,
+      status,
+      method,
+      email,
+      phone,
+      company_name,
+      created_at,
+      received_at: new Date().toISOString(),
+      raw_payload: payload
+    };
+
+    // Save/update to Firebase asynchronously under /razorpay/payments node
+    firebaseService.savePayment(paymentData).catch((fbErr) => {
+      console.error('Firebase save error:', fbErr);
+    });
 
     const query = `
       INSERT INTO payments (payment_id, amount, currency, status, method, email, phone, company_name, created_at, raw_payload)
@@ -182,8 +214,171 @@ app.post('/whatsapp/webhook', (req, res) => {
   }
 });
 
+/**
+ * Helper function to parse and process Valdho webhook data (Step 1 and Step 2)
+ */
+async function processValdhoWebhook(payload) {
+  if (!payload || !payload.form_data) {
+    throw new Error('Invalid Valdho webhook payload');
+  }
+
+  const formData = payload.form_data || {};
+  let email = null;
+  let name = null;
+  let phone = null;
+
+  // Extract Email
+  for (const key of Object.keys(formData)) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey === 'email' || lowerKey.endsWith('_email')) {
+      email = String(formData[key]).trim();
+      break;
+    }
+  }
+
+  // Extract Name
+  for (const key of Object.keys(formData)) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey.includes('name') || lowerKey.includes('first name')) {
+      name = String(formData[key]).trim();
+      break;
+    }
+  }
+
+  // Extract Phone
+  for (const key of Object.keys(formData)) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey.includes('phone') || lowerKey.includes('contact')) {
+      phone = String(formData[key]).trim();
+      break;
+    }
+  }
+
+  const isStep1 = !!(name || phone || formData["First Name"] || formData["Phone Number"]);
+  const isStep2 = Object.keys(formData).some(k => k.endsWith('_email') || k.includes('multiple-choice') || Array.isArray(formData[k]));
+
+  // Retrieve existing record from SQLite if available
+  let existing = null;
+  if (email) {
+    existing = await new Promise((resolve) => {
+      db.get('SELECT * FROM valdho_appointments WHERE email = ?', [email], (err, row) => {
+        resolve(row || null);
+      });
+    });
+  }
+
+  let step1_data = {};
+  let step2_data = {};
+  let all_form_data = {};
+
+  if (existing) {
+    try { step1_data = JSON.parse(existing.step1_data || '{}'); } catch(e){}
+    try { step2_data = JSON.parse(existing.step2_data || '{}'); } catch(e){}
+    try { all_form_data = JSON.parse(existing.all_form_data || '{}'); } catch(e){}
+    name = name || existing.name;
+    phone = phone || existing.phone;
+  }
+
+  if (isStep1 || !existing) {
+    step1_data = { ...step1_data, ...formData };
+  }
+  if (isStep2) {
+    step2_data = { ...step2_data, ...formData };
+  }
+
+  all_form_data = { ...all_form_data, ...formData };
+
+  const status = (isStep2 || (step2_data && Object.keys(step2_data).length > 0)) ? 'completed' : 'step1_received';
+
+  const appointmentRecord = {
+    email: email || `unknown_${Date.now()}@valdho.com`,
+    name: name || 'Valdho Lead',
+    phone: phone || 'N/A',
+    source: payload.source || 'valdho',
+    agency: 'firstoption_agency',
+    step1_data,
+    step2_data,
+    all_form_data,
+    status,
+    raw_payload: payload,
+    updated_at: new Date().toISOString()
+  };
+
+  // 1. Save / Update in SQLite
+  const query = `
+    INSERT INTO valdho_appointments (email, name, phone, step1_data, step2_data, all_form_data, status, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(email) DO UPDATE SET
+      name = COALESCE(excluded.name, valdho_appointments.name),
+      phone = COALESCE(excluded.phone, valdho_appointments.phone),
+      step1_data = excluded.step1_data,
+      step2_data = excluded.step2_data,
+      all_form_data = excluded.all_form_data,
+      status = excluded.status,
+      updated_at = CURRENT_TIMESTAMP
+  `;
+
+  db.run(query, [
+    appointmentRecord.email,
+    appointmentRecord.name,
+    appointmentRecord.phone,
+    JSON.stringify(step1_data),
+    JSON.stringify(step2_data),
+    JSON.stringify(all_form_data),
+    status
+  ], (err) => {
+    if (err) {
+      console.error('Failed to store Valdho appointment in SQLite database:', err.message);
+    } else {
+      console.log(`Valdho Appointment stored/updated in SQLite for email: ${appointmentRecord.email}`);
+    }
+  });
+
+  // 2. Save / Update in Firebase under node /firstoption_agency
+  firebaseService.saveValdhoAppointment(appointmentRecord).catch((fbErr) => {
+    console.error('Firebase saveValdhoAppointment error:', fbErr);
+  });
+
+  return appointmentRecord;
+}
+
+// POST routes for Valdho Form Webhooks (handles /valdho/webhook, /api/valdho/webhook, /webhook/valdho_first_option_agency)
+const valdhoWebhookHandler = async (req, res) => {
+  try {
+    const payload = req.body;
+    console.log('Valdho Webhook received:', JSON.stringify(payload, null, 2));
+    const result = await processValdhoWebhook(payload);
+    res.status(200).json({ status: 'ok', message: 'Valdho webhook processed successfully', email: result.email });
+  } catch (error) {
+    console.error('Error processing Valdho Webhook:', error.message || error);
+    res.status(400).json({ error: error.message || 'Failed to process Valdho webhook' });
+  }
+};
+
+app.post('/valdho/webhook', valdhoWebhookHandler);
+app.post('/api/valdho/webhook', valdhoWebhookHandler);
+app.post('/webhook/valdho_first_option_agency', valdhoWebhookHandler);
+
+// GET API route for Valdho Appointments
+app.get('/api/valdho/appointments', async (req, res) => {
+  const query = 'SELECT * FROM valdho_appointments ORDER BY updated_at DESC';
+  db.all(query, [], async (err, rows) => {
+    if (err || !rows || rows.length === 0) {
+      // Fallback to Firebase if local DB is empty
+      try {
+        const fbAppointments = await firebaseService.getValdhoAppointments();
+        return res.json(fbAppointments);
+      } catch (fbErr) {
+        return res.json(rows || []);
+      }
+    }
+    res.json(rows);
+  });
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Webhook URL should be configured as: https://raz.infiplus.in/webhook`);
+  console.log(`Valdho Webhook URL endpoint: https://raz.infiplus.in/valdho/webhook`);
 });

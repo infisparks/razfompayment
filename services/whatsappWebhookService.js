@@ -1,4 +1,5 @@
 const db = require('../db');
+const firebaseService = require('./firebaseService');
 
 /**
  * Parses incoming WhatsApp Cloud API webhook notifications and logs them to the database.
@@ -67,6 +68,23 @@ function parseWebhook(payload) {
         } else if (status === 'failed') {
           console.log('WhatsApp Failed');
         }
+
+        // Save/update status log to Firebase under /razorpay/whatsapp_logs/{message_id}
+        const firebaseLogData = {
+          message_id,
+          recipient,
+          status,
+          conversation_id,
+          pricing_category,
+          billable,
+          error_code,
+          error_title,
+          error_message,
+          raw_payload: payload
+        };
+        firebaseService.saveWhatsAppLog(firebaseLogData).catch((fbErr) => {
+          console.error('Firebase saveWhatsAppLog error:', fbErr);
+        });
 
         // Update database with status logs
         const query = `
