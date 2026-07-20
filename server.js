@@ -97,7 +97,7 @@ function cancelSchedulesForEmail(email) {
   });
 }
 
-// Helper: Restore and sync appointments from Firebase into SQLite so 0 data NEVER happens on server restart
+// Helper: Restore and sync appointments and schedules from Firebase into SQLite
 async function syncAppointmentsFromFirebase() {
   try {
     const fbList = await firebaseService.getValdhoAppointments();
@@ -134,6 +134,49 @@ async function syncAppointmentsFromFirebase() {
       }
       console.log(`[Firebase Auto Sync] Restored ${fbList.length} appointment(s) from Firebase into SQLite.`);
     }
+
+    // Also restore schedules from Firebase
+    const fbSchedules = await firebaseService.getValdhoSchedules();
+    if (fbSchedules && fbSchedules.length > 0) {
+      for (const sched of fbSchedules) {
+        if (!sched || !sched.email || sched.status !== 'pending') continue;
+        const checkExisting = await new Promise(res => db.get('SELECT id FROM whatsapp_schedules WHERE id = ?', [sched.id], (e, r) => res(r)));
+        if (!checkExisting) {
+          db.run(
+            `INSERT INTO whatsapp_schedules (id, email, phone, lead_name, form_type, message_text, scheduled_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+            [sched.id, sched.email, sched.phone || 'N/A', sched.lead_name || 'Valdho Lead', sched.form_type || 'half_form', sched.message_text || '', sched.scheduled_at || new Date().toISOString()]
+          );
+        }
+      }
+    }
+
+    // Auto-Ensure every active appointment has a pending schedule for continuous repeat messages
+    db.all(`SELECT * FROM valdho_appointments`, [], async (err, rows) => {
+      if (rows && rows.length > 0) {
+        for (const appRow of rows) {
+          const pending = await new Promise(res => db.get(`SELECT id FROM whatsapp_schedules WHERE LOWER(email) = LOWER(?) AND status = 'pending'`, [appRow.email], (e, r) => res(r)));
+          if (!pending) {
+            console.log(`[Auto Schedule Guard] Creating missing repeat schedule for lead ${appRow.email}...`);
+            const isCompleted = appRow.status === 'completed';
+            const msgText = isCompleted
+              ? HARDCODED_FULL_FORM_TEMPLATE.replace(/\{name\}/g, appRow.name || 'Valdho Lead').replace(/\{answers\}/g, 'Registration Completed')
+              : HARDCODED_HALF_FORM_TEMPLATE.replace(/\{name\}/g, appRow.name || 'Valdho Lead');
+            const fType = isCompleted ? 'full_form' : 'half_form';
+            const delay = isCompleted ? WHATSAPP_REPEAT_MINUTES : META_DELAY_MINUTES;
+
+            scheduleMessage({
+              email: appRow.email,
+              phone: appRow.phone || 'N/A',
+              lead_name: appRow.name || 'Valdho Lead',
+              form_type: fType,
+              message_text: msgText,
+              delayMinutes: delay
+            }).catch(e => console.error(e));
+          }
+        }
+      }
+    });
+
   } catch (err) {
     console.error('[Firebase Auto Sync Error]:', err.message);
   }

@@ -183,14 +183,13 @@ function updateValdhoStats() {
 // -------------------------------------------------------------
 function getCountdownBadgeHtml(targetIso, isCompleted) {
   if (!targetIso) {
-    if (isCompleted) return `<span class="badge badge-captured" style="background-color: #ecfdf5; color: #059669; font-weight: 600;">Full Form Completed ✅</span>`;
-    return '<span class="badge badge-pending" style="background-color: #fef3c7; color: #92400e;">Scheduling 5m... ⏳</span>';
+    return '<span class="badge badge-pending" style="background-color: #fef3c7; color: #92400e; font-weight: 600;">Scheduling next 1m repeat... ⏳</span>';
   }
 
   const diffMs = new Date(targetIso).getTime() - Date.now();
 
   if (diffMs <= 0) {
-    return `<span class="badge" style="background-color: #ef4444; color: white;">⚡ Sending Message...</span>`;
+    return `<span class="badge" style="background-color: #ef4444; color: white; font-weight: 600;">⚡ Sending WhatsApp Repeat...</span>`;
   }
 
   const totalSecs = Math.floor(diffMs / 1000);
@@ -208,7 +207,7 @@ function getCountdownBadgeHtml(targetIso, isCompleted) {
     return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 6px;">⏳ ${timeString} (Waiting for Full Form)</span>`;
   }
 
-  return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 6px;">⏳ ${timeString}</span>`;
+  return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 6px;">⏳ ${timeString} (Next Message Repeat)</span>`;
 }
 
 function startCountdownTicker() {
