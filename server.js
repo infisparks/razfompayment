@@ -43,6 +43,40 @@ const HARDCODED_HALF_FORM_TEMPLATE = `*Dear {name},*\n\nWe noticed you started y
 
 const HARDCODED_FULL_FORM_TEMPLATE = `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`;
 
+// Recursive Deep Extractor for Name
+function extractDeepName(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  for (const k of Object.keys(obj)) {
+    const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if ((kLower.includes('name') || kLower.includes('firstname') || kLower.includes('first')) && typeof obj[k] === 'string') {
+      const val = obj[k].trim();
+      if (val && val !== 'Valdho Lead' && !val.includes('@')) return val;
+    }
+    if (typeof obj[k] === 'object') {
+      const found = extractDeepName(obj[k]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+// Recursive Deep Extractor for Phone
+function extractDeepPhone(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  for (const k of Object.keys(obj)) {
+    const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if ((kLower.includes('phone') || kLower.includes('mobile') || kLower.includes('contact') || kLower.includes('number')) && typeof obj[k] === 'string') {
+      const digits = obj[k].replace(/\D/g, '');
+      if (digits.length >= 10) return obj[k].trim();
+    }
+    if (typeof obj[k] === 'object') {
+      const found = extractDeepPhone(obj[k]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 // Helper: Calculate next fixed interval time locked to submission timestamp (No time mismatch on server reboot!)
 function getNextFixedIntervalTime(submissionIsoStr, intervalMinutes = 5) {
   const baseMs = new Date(submissionIsoStr || Date.now()).getTime();
@@ -460,9 +494,17 @@ async function checkAndDispatchDueMessages() {
 // Run background dispatcher every 5 seconds
 setInterval(checkAndDispatchDueMessages, 5000);
 
-// -------------------------------------------------------------
-// API ENDPOINTS FOR FRONTEND DASHBOARD (INSTANT <10ms RESPONSES)
-// -------------------------------------------------------------
+app.delete('/api/valdho/purge-firebase-schedules', async (req, res) => {
+  try {
+    await firebaseService.purgeSchedulesNode();
+    db.run(`DELETE FROM whatsapp_schedules`);
+    console.log('[Firebase Purge] Completely deleted firstoption_agency_schedules node from Firebase!');
+    res.json({ status: 'ok', message: 'Successfully deleted all data inside firstoption_agency_schedules node from Firebase & SQLite' });
+  } catch (err) {
+    console.error('[Firebase Purge Error]:', err.message);
+    res.status(500).json({ status: 'error', error: err.message });
+  }
+});
 app.get('/api/valdho/appointments', (req, res) => {
   db.all(`SELECT * FROM valdho_appointments ORDER BY updated_at DESC`, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });

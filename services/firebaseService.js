@@ -78,12 +78,21 @@ async function deleteValdhoSchedule() {
   return { success: true };
 }
 
-/**
- * Save WhatsApp dispatch log to Firebase under `/firstoption_agency_logs/{logId}`
- */
+async function purgeSchedulesNode() {
+  const nodePath = `firstoption_agency_schedules`;
+  try {
+    const targetUrl = `${databaseUrl}/${nodePath}.json`;
+    await axios.delete(targetUrl, { timeout: 10000 });
+    console.log(`[Firebase REST API] Purged node /${nodePath}`);
+    return { success: true };
+  } catch (err) {
+    console.error(`[Firebase REST Error] Failed to purge schedules node:`, err.message || err);
+    return { success: false, error: err.message };
+  }
+}
+
 async function saveWhatsAppLog(logData) {
   if (!logData || !logData.id) return { success: false, error: 'Missing log id' };
-
   const logId = logData.id;
   const nodePath = `firstoption_agency_logs/${logId}`;
   const payload = {
@@ -107,5 +116,6 @@ module.exports = {
   saveValdhoSchedule,
   getValdhoSchedules,
   deleteValdhoSchedule,
+  purgeSchedulesNode,
   saveWhatsAppLog
 };

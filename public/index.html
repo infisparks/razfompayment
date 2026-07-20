@@ -58,10 +58,14 @@
       <div class="dashboard-card">
         <div class="card-header">
           <div class="card-title">Valdho Form Appointments (firstoption_agency)</div>
-          <div>
+          <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary" id="btn-refresh-valdho">
               <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
               Refresh
+            </button>
+            <button class="btn btn-danger" onclick="purgeFirebaseSchedules()" style="background-color: #ef4444; border-color: #ef4444; color: white;">
+              <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+              Delete All Firebase Schedules Node
             </button>
           </div>
         </div>

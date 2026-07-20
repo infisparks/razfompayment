@@ -315,6 +315,21 @@ window.deleteAppointment = async function(email, name) {
   }
 };
 
+window.purgeFirebaseSchedules = async function() {
+  if (!confirm("⚠️ ARE YOU SURE?\n\nThis will completely DELETE all data inside the 'firstoption_agency_schedules' node in Firebase!")) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/valdho/purge-firebase-schedules', { method: 'DELETE' });
+    const data = await res.json();
+    alert('✅ ' + (data.message || 'Firebase schedules node deleted successfully!'));
+    fetchValdhoAppointments();
+  } catch (err) {
+    alert('❌ Error purging Firebase schedules: ' + err.message);
+  }
+};
+
 function closeModal() { document.getElementById('modal-backdrop').classList.remove('active'); }
 
 // DOM Initialization
