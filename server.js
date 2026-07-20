@@ -37,7 +37,7 @@ app.get('/health', (req, res) => {
 // HARDCODED MESSAGE TEMPLATES & TIMING CONFIGURATION
 // -------------------------------------------------------------
 const META_DELAY_MINUTES = 5; // Wait 5m after Step 1 before Meta retargeting event
-const WHATSAPP_REPEAT_MINUTES = 1; // Repeat WhatsApp messages every 1m
+const WHATSAPP_REPEAT_MINUTES = 5; // Repeat WhatsApp messages every 5m
 
 const HARDCODED_HALF_FORM_TEMPLATE = `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`;
 

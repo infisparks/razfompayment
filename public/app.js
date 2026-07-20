@@ -186,12 +186,12 @@ function updateValdhoStats() {
 }
 
 // -------------------------------------------------------------
-// LIVE COUNTDOWN TIMER CALCULATOR (1-SECOND REAL-TIME DECREASE)
+// LIVE COUNTDOWN TIMER CALCULATOR (1-SECOND REAL-TIME DECREASE BASED ON SUBMISSION TIME)
 // -------------------------------------------------------------
-function getNextIntervalTargetIso(submissionIsoStr, intervalMinutes = 1) {
+function get5MinNextIntervalTargetIso(submissionIsoStr) {
   const baseMs = new Date(submissionIsoStr || Date.now()).getTime();
   const nowMs = Date.now();
-  const intervalMs = (intervalMinutes || 1) * 60 * 1000;
+  const intervalMs = 5 * 60 * 1000; // Fixed 5 minutes
 
   if (nowMs < baseMs) {
     return new Date(baseMs + intervalMs).toISOString();
@@ -208,32 +208,24 @@ function getNextIntervalTargetIso(submissionIsoStr, intervalMinutes = 1) {
 function getCountdownBadgeHtml(targetIso, isCompleted, submissionTime) {
   let effectiveTarget = targetIso;
 
-  if (!effectiveTarget) {
-    effectiveTarget = getNextIntervalTargetIso(submissionTime, isCompleted ? 1 : 5);
+  // If targetIso is missing OR in the past, calculate the next future 5m slot based on submission time
+  if (!effectiveTarget || (new Date(effectiveTarget).getTime() - Date.now() <= 0)) {
+    effectiveTarget = get5MinNextIntervalTargetIso(submissionTime);
   }
 
   const diffMs = new Date(effectiveTarget).getTime() - Date.now();
 
-  if (diffMs <= 0) {
-    return `<span class="badge" style="background-color: #ef4444; color: white; font-weight: 600;">⚡ Sending WhatsApp Repeat...</span>`;
-  }
-
-  const totalSecs = Math.floor(diffMs / 1000);
+  const totalSecs = Math.max(0, Math.floor(diffMs / 1000));
   const mins = Math.floor((totalSecs % 3600) / 60);
   const secs = totalSecs % 60;
 
-  let timeString = '';
-  if (mins > 0) {
-    timeString = `${mins}m ${secs}s remaining`;
-  } else {
-    timeString = `${secs}s remaining`;
-  }
+  let timeString = mins > 0 ? `${mins}m ${secs}s remaining` : `${secs}s remaining`;
 
   if (!isCompleted) {
     return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 6px;">⏳ ${timeString} (Waiting for Full Form)</span>`;
   }
 
-  return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 6px;">⏳ ${timeString} (Next Message Repeat)</span>`;
+  return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 6px;">⏳ ${timeString} (Next 5m Message)</span>`;
 }
 
 function startCountdownTicker() {
