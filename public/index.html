@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>valdho_first_option_agency - Automation & Webhook Dashboard</title>
-  <link rel="stylesheet" href="style.css?v=4.0">
-  <!-- Load Lucide icons for UI symbols -->
+  <title>First Option Agency - Lead Webhook Dashboard</title>
+  <link rel="stylesheet" href="style.css?v=5.0">
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
@@ -13,8 +12,8 @@
     <!-- Header -->
     <header>
       <div>
-        <h1 id="page-title">valdho_first_option_agency</h1>
-        <div class="subtitle" id="page-subtitle">Real-time appointment webhooks & Evolution WhatsApp scheduling engine</div>
+        <h1 id="page-title">First Option Agency Dashboard</h1>
+        <div class="subtitle" id="page-subtitle">Real-time Lead Webhooks & Instant Professional WhatsApp Welcome Messaging</div>
       </div>
       <div style="display: flex; align-items: center; gap: 12px;">
         <div class="connection-status">
@@ -28,7 +27,7 @@
     <div class="nav-tabs">
       <a href="/index.html" class="nav-tab active" style="text-decoration: none;">
         <i data-lucide="folder" style="width: 16px; height: 16px;"></i>
-        valdho_first_option_agency
+        firstoption_agency Leads
       </a>
     </div>
 
@@ -37,35 +36,31 @@
       <!-- Stats Grid -->
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-label">Total Appointments</div>
+          <div class="stat-label">Total Leads Received</div>
           <div class="stat-value" id="stat-valdho-total">0</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Completed 2-Step (Full Form)</div>
+          <div class="stat-label">Full Form Completed</div>
           <div class="stat-value" id="stat-valdho-completed" style="color: #059669;">0</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Step 1 Received (Half Form)</div>
+          <div class="stat-label">Step 1 Received</div>
           <div class="stat-value" id="stat-valdho-step1" style="color: #d97706;">0</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Automation Sequence Engine</div>
-          <div class="stat-value" id="stat-engine-status" style="font-size: 16px; color: #10b981;">▶️ Active (5m Sequence)</div>
+          <div class="stat-label">Welcome WhatsApp Service</div>
+          <div class="stat-value" id="stat-engine-status" style="font-size: 15px; color: #10b981;">🚀 Direct Dispatch Active</div>
         </div>
       </div>
 
       <!-- Appointments Card -->
       <div class="dashboard-card">
         <div class="card-header">
-          <div class="card-title">Valdho Form Appointments (firstoption_agency)</div>
+          <div class="card-title">First Option Agency Leads</div>
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary" id="btn-refresh-valdho">
               <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
               Refresh
-            </button>
-            <button class="btn btn-danger" onclick="purgeFirebaseSchedules()" style="background-color: #ef4444; border-color: #ef4444; color: white;">
-              <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
-              Delete All Firebase Schedules Node
             </button>
           </div>
         </div>
@@ -79,16 +74,15 @@
                 <th>Phone Number</th>
                 <th>Form Selections / Answers</th>
                 <th>Status</th>
-                <th>Next Message Countdown</th>
                 <th>Last Submission</th>
                 <th style="text-align: right;">Actions</th>
               </tr>
             </thead>
             <tbody id="valdho-body">
               <tr>
-                <td colspan="7" class="empty-state">
+                <td colspan="6" class="empty-state">
                   <i data-lucide="loader" class="spin" style="width: 24px; height: 24px;"></i>
-                  <p>Loading Valdho appointments...</p>
+                  <p>Loading First Option Agency leads...</p>
                 </td>
               </tr>
             </tbody>
@@ -102,7 +96,7 @@
   <div class="modal-backdrop" id="modal-backdrop">
     <div class="modal">
       <div class="modal-header">
-        <div class="modal-title" id="modal-title">Valdho Lead Details</div>
+        <div class="modal-title" id="modal-title">Lead Details</div>
         <button class="modal-close" id="modal-close">&times;</button>
       </div>
       <div class="modal-body">
@@ -111,7 +105,6 @@
           <div><strong>Status:</strong> <span id="modal-pay-status">-</span></div>
           <div><strong>Email:</strong> <span id="modal-pay-email">-</span></div>
           <div><strong>Phone:</strong> <span id="modal-pay-phone">-</span></div>
-          <div><strong>Target Firebase Node:</strong> <span id="modal-pay-company">/firstoption_agency</span></div>
           <div><strong>Submission Date:</strong> <span id="modal-pay-date">-</span></div>
         </div>
         <strong>Full Webhook Payload (JSON):</strong>
@@ -123,6 +116,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=4.0"></script>
+  <script src="app.js?v=5.0"></script>
 </body>
 </html>
