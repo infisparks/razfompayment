@@ -146,7 +146,6 @@ function cancelSchedulesForEmail(email) {
       if (rows && rows.length > 0) {
         for (const r of rows) {
           db.run(`DELETE FROM whatsapp_schedules WHERE id = ?`, [r.id]);
-          firebaseService.deleteValdhoSchedule(r.id).catch(e => console.error(e));
         }
       }
       resolve();
@@ -304,40 +303,6 @@ app.post('/valdho/webhook', async (req, res) => {
       try { if (existing.all_form_data) mergedAll = { ...JSON.parse(existing.all_form_data), ...payload }; } catch (e) {}
     }
 
-// Recursive Deep Extractor for Name
-function extractDeepName(obj) {
-  if (!obj || typeof obj !== 'object') return null;
-  for (const k of Object.keys(obj)) {
-    const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if ((kLower.includes('name') || kLower.includes('firstname') || kLower.includes('first')) && typeof obj[k] === 'string') {
-      const val = obj[k].trim();
-      if (val && val !== 'Valdho Lead' && !val.includes('@')) return val;
-    }
-    if (typeof obj[k] === 'object') {
-      const found = extractDeepName(obj[k]);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-// Recursive Deep Extractor for Phone
-function extractDeepPhone(obj) {
-  if (!obj || typeof obj !== 'object') return null;
-  for (const k of Object.keys(obj)) {
-    const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if ((kLower.includes('phone') || kLower.includes('mobile') || kLower.includes('contact') || kLower.includes('number')) && typeof obj[k] === 'string') {
-      const digits = obj[k].replace(/\D/g, '');
-      if (digits.length >= 10) return obj[k].trim();
-    }
-    if (typeof obj[k] === 'object') {
-      const found = extractDeepPhone(obj[k]);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
     // Extract REAL Name & Phone by checking current payload, mergedStep1, mergedAll, AND existing record!
     const finalName = extractDeepName(formData) || extractDeepName(payload) || extractDeepName(mergedStep1) || extractDeepName(mergedAll)
       || (existing && existing.name && existing.name !== 'Valdho Lead' ? existing.name : null)
@@ -442,7 +407,6 @@ async function checkAndDispatchDueMessages() {
             if (hasStep2) {
               console.log(`[Scheduler Safety] Lead ${item.email} completed Full Form! Deleting Half Form schedule ID ${item.id}.`);
               db.run(`DELETE FROM whatsapp_schedules WHERE id = ?`, [item.id]);
-              firebaseService.deleteValdhoSchedule(item.id).catch(e => console.error(e));
               continue;
             }
 
@@ -469,16 +433,6 @@ async function checkAndDispatchDueMessages() {
 
           // Mark schedule status
           db.run(`UPDATE whatsapp_schedules SET status = ?, sent_at = ? WHERE id = ?`, [status, sent_at, item.id]);
-
-          // Save message log
-          const logData = {
-            id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            recipient: item.phone,
-            payment_id: item.email,
-            status: status,
-            sent_at: sent_at || new Date().toISOString()
-          };
-          firebaseService.saveWhatsAppLog(logData).catch(e => console.error(e));
 
           // Update existing schedule in-place to the next 5-minute slot (prevents duplicate schedule bloat)
           if (item.email) {
@@ -533,7 +487,6 @@ app.get('/api/valdho/whatsapp/schedules', (req, res) => {
 app.delete('/api/valdho/whatsapp/schedules/:id', (req, res) => {
   const id = req.params.id;
   db.run(`DELETE FROM whatsapp_schedules WHERE id = ?`, [id]);
-  firebaseService.deleteValdhoSchedule(id).catch(e => console.error(e));
   res.json({ status: 'ok', message: `Schedule #${id} deleted` });
 });
 

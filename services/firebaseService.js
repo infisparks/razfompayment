@@ -1,15 +1,14 @@
 const axios = require('axios');
 
 /**
- * Firebase Service for managing Valdho appointments and schedules.
- * Uses Firebase Realtime Database REST API using databaseURL:
- * https://billing4-44c05-default-rtdb.firebaseio.com
+ * Single-Node Firebase Service: Manages strictly 1 single node: `/firstoption_agency`
+ * Realtime Database URL: https://billing4-44c05-default-rtdb.firebaseio.com
  */
 
 const databaseUrl = (process.env.FIREBASE_DATABASE_URL || 'https://billing4-44c05-default-rtdb.firebaseio.com').replace(/\/$/, '');
 
 /**
- * Save or update a Valdho appointment in Firebase under `/firstoption_agency/{emailKey}`
+ * Save or update a Valdho appointment under single node `/firstoption_agency/{emailKey}`
  */
 async function saveValdhoAppointment(emailKey, appointmentData) {
   if (!emailKey) return { success: false, error: 'Missing email key' };
@@ -17,22 +16,22 @@ async function saveValdhoAppointment(emailKey, appointmentData) {
   const nodePath = `firstoption_agency/${emailKey}`;
   const payload = {
     ...appointmentData,
-    updated_at: new Date().toISOString()
+    updated_at: appointmentData.updated_at || new Date().toISOString()
   };
 
   try {
     const targetUrl = `${databaseUrl}/${nodePath}.json`;
     await axios.put(targetUrl, payload, { timeout: 10000 });
-    console.log(`[Firebase REST API] Valdho appointment ${emailKey} saved under /${nodePath}`);
+    console.log(`[Firebase Single Node] Saved ${emailKey} under /${nodePath}`);
     return { success: true };
   } catch (err) {
-    console.error(`[Firebase REST Error] Failed to save appointment ${emailKey}:`, err.message || err);
+    console.error(`[Firebase Error] Failed to save appointment ${emailKey}:`, err.message || err);
     return { success: false, error: err.message };
   }
 }
 
 /**
- * Fetch all Valdho appointments under `/firstoption_agency`
+ * Fetch all appointments from single node `/firstoption_agency`
  */
 async function getValdhoAppointments() {
   const nodePath = `firstoption_agency`;
@@ -42,13 +41,13 @@ async function getValdhoAppointments() {
     const data = response.data;
     return data ? Object.values(data) : [];
   } catch (err) {
-    console.error('[Firebase REST Error] Failed to fetch Valdho appointments:', err.message || err);
+    console.error('[Firebase Error] Failed to fetch appointments:', err.message || err);
     return [];
   }
 }
 
 /**
- * Delete Valdho appointment from Firebase under `/firstoption_agency/{emailKey}`
+ * Delete an appointment from single node `/firstoption_agency/{emailKey}`
  */
 async function deleteValdhoAppointment(email) {
   if (!email) return { success: false, error: 'Missing email' };
@@ -58,53 +57,10 @@ async function deleteValdhoAppointment(email) {
   try {
     const targetUrl = `${databaseUrl}/${nodePath}.json`;
     await axios.delete(targetUrl, { timeout: 10000 });
-    console.log(`[Firebase REST API] Deleted appointment under /${nodePath}`);
+    console.log(`[Firebase Single Node] Deleted appointment under /${nodePath}`);
     return { success: true };
   } catch (err) {
-    console.error(`[Firebase REST Error] Failed to delete appointment:`, err.message || err);
-    return { success: false, error: err.message };
-  }
-}
-
-async function saveValdhoSchedule() {
-  return { success: true };
-}
-
-async function getValdhoSchedules() {
-  return [];
-}
-
-async function deleteValdhoSchedule() {
-  return { success: true };
-}
-
-async function purgeSchedulesNode() {
-  const nodePath = `firstoption_agency_schedules`;
-  try {
-    const targetUrl = `${databaseUrl}/${nodePath}.json`;
-    await axios.delete(targetUrl, { timeout: 10000 });
-    console.log(`[Firebase REST API] Purged node /${nodePath}`);
-    return { success: true };
-  } catch (err) {
-    console.error(`[Firebase REST Error] Failed to purge schedules node:`, err.message || err);
-    return { success: false, error: err.message };
-  }
-}
-
-async function saveWhatsAppLog(logData) {
-  if (!logData || !logData.id) return { success: false, error: 'Missing log id' };
-  const logId = logData.id;
-  const nodePath = `firstoption_agency_logs/${logId}`;
-  const payload = {
-    ...logData,
-    timestamp: new Date().toISOString()
-  };
-
-  try {
-    const targetUrl = `${databaseUrl}/${nodePath}.json`;
-    await axios.put(targetUrl, payload, { timeout: 10000 });
-    return { success: true };
-  } catch (err) {
+    console.error(`[Firebase Error] Failed to delete appointment:`, err.message || err);
     return { success: false, error: err.message };
   }
 }
@@ -112,10 +68,5 @@ async function saveWhatsAppLog(logData) {
 module.exports = {
   saveValdhoAppointment,
   getValdhoAppointments,
-  deleteValdhoAppointment,
-  saveValdhoSchedule,
-  getValdhoSchedules,
-  deleteValdhoSchedule,
-  purgeSchedulesNode,
-  saveWhatsAppLog
+  deleteValdhoAppointment
 };
