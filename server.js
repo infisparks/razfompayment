@@ -1,31 +1,27 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
-const db = require('./db');
 const evolutionWhatsappService = require('./services/evolutionWhatsappService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({
   verify: (req, res, buf) => {
     req.rawBody = buf.toString();
   }
 }));
 
-// Serve single page for dashboard
-app.get(['/', '/valdho', '/valdho_first_option_agency', '/index.html'], (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.get('/', (req, res) => {
+  res.json({ service: 'First Option Agency Webhook Engine', status: 'active', time: new Date() });
 });
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', time: new Date() });
 });
 
-// Professional Welcome Message Template (First Option Agency)
+// Friendly & Professional First Option Agency Welcome Message Template
 const FIRST_OPTION_WELCOME_TEMPLATE = `*Dear {name},*
 
 Welcome to *First Option Agency*! 🚀
@@ -85,7 +81,7 @@ function extractDeepPhone(obj) {
 }
 
 // -------------------------------------------------------------
-// WEBHOOK ENDPOINT (/valdho/webhook)
+// WEBHOOK HANDLER (/valdho/webhook)
 // -------------------------------------------------------------
 app.post('/valdho/webhook', async (req, res) => {
   try {
@@ -94,122 +90,38 @@ app.post('/valdho/webhook', async (req, res) => {
 
     const formData = payload.form_data || payload;
 
-    // Extract Email
-    let email = null;
-    Object.keys(formData).forEach(k => {
-      if (k.toLowerCase().includes('email') && typeof formData[k] === 'string' && formData[k].includes('@')) {
-        email = formData[k].trim();
-      }
+    // Extract Name & Phone Number
+    const finalName = extractDeepName(formData) || extractDeepName(payload) || 'Valdho Lead';
+    const finalPhone = extractDeepPhone(formData) || extractDeepPhone(payload) || null;
+
+    if (!finalPhone) {
+      console.warn('[Valdho Webhook Warning] No valid phone number found in payload');
+      return res.status(400).json({ status: 'error', error: 'Missing phone number' });
+    }
+
+    // Instantly send friendly welcome WhatsApp message
+    const welcomeMsg = FIRST_OPTION_WELCOME_TEMPLATE.replace(/\{name\}/g, finalName);
+    console.log(`[First Option Agency] Instantly sending welcome message to ${finalPhone}...`);
+
+    const result = await evolutionWhatsappService.sendEvolutionWhatsApp(finalPhone, welcomeMsg);
+
+    res.json({
+      status: 'ok',
+      message: 'First form fill webhook received. WhatsApp welcome message sent instantly!',
+      name: finalName,
+      phone: finalPhone,
+      whatsapp_delivered: result.success
     });
 
-    if (!email) {
-      Object.keys(payload).forEach(k => {
-        if (k.toLowerCase().includes('email') && typeof payload[k] === 'string' && payload[k].includes('@')) {
-          email = payload[k].trim();
-        }
-      });
-    }
-
-    if (!email) {
-      console.warn('[Valdho Webhook Warning] Received payload without email identifier');
-      return res.status(400).json({ status: 'error', error: 'Missing email in payload' });
-    }
-
-    const formDataKeys = Object.keys(formData);
-    const hasMultipleChoices = formDataKeys.some(k => Array.isArray(formData[k]) || k.includes('multiple-choice'));
-
-    let isCompleted = false;
-    let step1Data = {};
-    let step2Data = {};
-
-    if (hasMultipleChoices || !formDataKeys.includes('First Name')) {
-      isCompleted = true;
-      step2Data = formData;
-    } else {
-      step1Data = formData;
-    }
-
-    // Existing lead lookup
-    const existing = await new Promise((res) => {
-      db.get('SELECT * FROM valdho_appointments WHERE LOWER(email) = LOWER(?)', [email], (err, row) => res(row));
-    });
-
-    let mergedStep1 = step1Data;
-    let mergedStep2 = step2Data;
-    let mergedAll = payload;
-
-    if (existing) {
-      try { if (existing.step1_data) mergedStep1 = { ...JSON.parse(existing.step1_data), ...step1Data }; } catch (e) {}
-      try { if (existing.step2_data) mergedStep2 = { ...JSON.parse(existing.step2_data), ...step2Data }; } catch (e) {}
-      try { if (existing.all_form_data) mergedAll = { ...JSON.parse(existing.all_form_data), ...payload }; } catch (e) {}
-    }
-
-    const finalName = extractDeepName(formData) || extractDeepName(payload) || extractDeepName(mergedStep1) || extractDeepName(mergedAll)
-      || (existing && existing.name && existing.name !== 'Valdho Lead' ? existing.name : null)
-      || 'Valdho Lead';
-
-    const finalPhone = extractDeepPhone(formData) || extractDeepPhone(payload) || extractDeepPhone(mergedStep1) || extractDeepPhone(mergedAll)
-      || (existing && existing.phone && existing.phone !== 'N/A' ? existing.phone : null)
-      || 'N/A';
-
-    const finalStatus = (existing && existing.status === 'completed') || isCompleted ? 'completed' : 'step1_received';
-
-    const insertQuery = `
-      INSERT INTO valdho_appointments (email, name, phone, status, step1_data, step2_data, all_form_data, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      ON CONFLICT(email) DO UPDATE SET
-        name = CASE WHEN excluded.name != 'Valdho Lead' THEN excluded.name ELSE valdho_appointments.name END,
-        phone = CASE WHEN excluded.phone != 'N/A' THEN excluded.phone ELSE valdho_appointments.phone END,
-        status = excluded.status,
-        step1_data = excluded.step1_data,
-        step2_data = excluded.step2_data,
-        all_form_data = excluded.all_form_data,
-        updated_at = CURRENT_TIMESTAMP
-    `;
-
-    await new Promise((resolve, reject) => {
-      db.run(insertQuery, [
-        email, finalName, finalPhone, finalStatus,
-        JSON.stringify(mergedStep1), JSON.stringify(mergedStep2), JSON.stringify(mergedAll)
-      ], function(err) {
-        if (err) reject(err); else resolve();
-      });
-    });
-
-    // Send Professional First Option Agency Welcome WhatsApp Message on form submission
-    if (finalPhone && finalPhone !== 'N/A') {
-      const welcomeMsg = FIRST_OPTION_WELCOME_TEMPLATE.replace(/\{name\}/g, finalName || 'Valdho Lead');
-      console.log(`[First Option Agency] Sending professional welcome message to ${finalPhone}...`);
-      evolutionWhatsappService.sendEvolutionWhatsApp(finalPhone, welcomeMsg).catch(e => console.error(e));
-    }
-
-    res.json({ status: 'ok', message: 'Webhook processed & welcome WhatsApp message sent successfully', email, name: finalName, phone: finalPhone });
   } catch (err) {
     console.error('[Valdho Webhook Error]:', err.message);
     res.status(500).json({ status: 'error', error: err.message });
   }
 });
 
-// Dashboard APIs
-app.get('/api/valdho/appointments', (req, res) => {
-  db.all(`SELECT * FROM valdho_appointments ORDER BY updated_at DESC`, [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows || []);
-  });
-});
-
-app.delete('/api/valdho/appointments/:email', async (req, res) => {
-  const email = req.params.email;
-  if (!email) return res.status(400).json({ error: 'Missing email' });
-
-  db.run(`DELETE FROM valdho_appointments WHERE LOWER(email) = LOWER(?)`, [email]);
-  res.json({ status: 'ok', message: `Appointment for ${email} deleted successfully` });
-});
-
 app.listen(PORT, () => {
   console.log(`=======================================================`);
-  console.log(` First Option Agency Server running on port ${PORT}`);
-  console.log(` Dashboard URL: http://localhost:${PORT}`);
-  console.log(` Webhook URL: http://localhost:${PORT}/valdho/webhook`);
+  console.log(` First Option Agency Webhook Engine running on port ${PORT}`);
+  console.log(` Webhook Endpoint: http://localhost:${PORT}/valdho/webhook`);
   console.log(`=======================================================`);
 });
