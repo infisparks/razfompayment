@@ -43,12 +43,36 @@ const HARDCODED_HALF_FORM_TEMPLATE = `*Dear {name},*\n\nWe noticed you started y
 
 const HARDCODED_FULL_FORM_TEMPLATE = `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`;
 
-// Helper: Schedule WhatsApp message for specified minutes in future
-function scheduleMessage({ email, phone, lead_name, form_type, message_text, delayMinutes }) {
-  let targetDate = new Date();
-  const minsToAdd = typeof delayMinutes === 'number' ? delayMinutes : (form_type === 'half_form' ? META_DELAY_MINUTES : WHATSAPP_REPEAT_MINUTES);
-  targetDate.setMinutes(targetDate.getMinutes() + minsToAdd);
-  const targetDateStr = targetDate.toISOString();
+// Helper: Calculate next fixed interval time locked to submission timestamp (No time mismatch on server reboot!)
+function getNextFixedIntervalTime(submissionIsoStr, intervalMinutes = 5) {
+  const baseMs = new Date(submissionIsoStr || Date.now()).getTime();
+  const nowMs = Date.now();
+  const intervalMs = (intervalMinutes || 5) * 60 * 1000;
+
+  if (nowMs < baseMs) {
+    return new Date(baseMs + intervalMs).toISOString();
+  }
+
+  const elapsedMs = nowMs - baseMs;
+  const slotsPassed = Math.floor(elapsedMs / intervalMs);
+  const nextSlotIndex = slotsPassed + 1;
+
+  const nextTargetMs = baseMs + (nextSlotIndex * intervalMs);
+  return new Date(nextTargetMs).toISOString();
+}
+
+// Helper: Schedule WhatsApp message for specified minutes in future locked to submission time
+function scheduleMessage({ email, phone, lead_name, form_type, message_text, delayMinutes, baseSubmissionTime }) {
+  let targetDateStr;
+
+  if (baseSubmissionTime) {
+    targetDateStr = getNextFixedIntervalTime(baseSubmissionTime, delayMinutes || 5);
+  } else {
+    let targetDate = new Date();
+    const minsToAdd = typeof delayMinutes === 'number' ? delayMinutes : (form_type === 'half_form' ? META_DELAY_MINUTES : WHATSAPP_REPEAT_MINUTES);
+    targetDate.setMinutes(targetDate.getMinutes() + minsToAdd);
+    targetDateStr = targetDate.toISOString();
+  }
 
   return new Promise((resolve, reject) => {
     const query = `
@@ -71,11 +95,11 @@ function scheduleMessage({ email, phone, lead_name, form_type, message_text, del
         message_text,
         scheduled_at: targetDateStr,
         status: 'pending',
-        created_at: new Date().toISOString()
+        created_at: baseSubmissionTime || new Date().toISOString()
       };
 
       firebaseService.saveValdhoSchedule(scheduleRecord).catch(e => console.error(e));
-      console.log(`[Valdho Scheduler] Scheduled ID ${scheduleRecord.id} for ${phone} at ${targetDateStr} (${minsToAdd}m delay)`);
+      console.log(`[Valdho Scheduler] Scheduled ID ${scheduleRecord.id} for ${phone} at ${targetDateStr}`);
       resolve(scheduleRecord);
     });
   });
@@ -170,7 +194,8 @@ async function syncAppointmentsFromFirebase() {
               lead_name: appRow.name || 'Valdho Lead',
               form_type: fType,
               message_text: msgText,
-              delayMinutes: delay
+              delayMinutes: delay,
+              baseSubmissionTime: appRow.created_at || appRow.updated_at
             }).catch(e => console.error(e));
           }
         }

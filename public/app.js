@@ -107,9 +107,16 @@ function renderValdhoTable() {
       ? choices.map(c => `<span class="choice-pill">${c}</span>`).join('')
       : '<em style="color: #d97706; font-size: 13px; font-weight: 500;">⚠️ Step 2 Pending...</em>';
 
+    let metaBadge = '';
+    if (app.meta_sent) {
+      metaBadge = `<div style="margin-top: 4px;"><span class="badge" style="background-color: #dbeafe; color: #1e40af; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 4px;">🎯 Meta CAPI Retargeted</span></div>`;
+    } else if (!isCompleted) {
+      metaBadge = `<div style="margin-top: 4px;"><span class="badge" style="background-color: #fef3c7; color: #92400e; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 4px;">🎯 Meta Retargeting (In 5m)</span></div>`;
+    }
+
     const statusBadge = isCompleted
       ? `<span class="badge badge-captured" style="background-color: #ecfdf5; color: #059669; font-weight: 600;">Full Form Completed ✅</span>`
-      : `<span class="badge badge-pending" style="background-color: #fffbebfb; color: #b45309; font-weight: 600;">⚠️ Half Form (Waiting for Full Form)</span>`;
+      : `<span class="badge badge-pending" style="background-color: #fffbebfb; color: #b45309; font-weight: 600;">⚠️ Half Form (Waiting for Full Form)</span>${metaBadge}`;
 
     const name = (app.name && app.name !== 'Valdho Lead' ? app.name : null)
       || step1Data['First Name'] || step1Data.name || step1Data.first_name
