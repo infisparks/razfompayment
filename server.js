@@ -98,7 +98,6 @@ function scheduleMessage({ email, phone, lead_name, form_type, message_text, del
         created_at: baseSubmissionTime || new Date().toISOString()
       };
 
-      firebaseService.saveValdhoSchedule(scheduleRecord).catch(e => console.error(e));
       console.log(`[Valdho Scheduler] Scheduled ID ${scheduleRecord.id} for ${phone} at ${targetDateStr}`);
       resolve(scheduleRecord);
     });
@@ -159,20 +158,10 @@ async function syncAppointmentsFromFirebase() {
       console.log(`[Firebase Auto Sync] Restored ${fbList.length} appointment(s) from Firebase into SQLite.`);
     }
 
-    // Also restore schedules from Firebase
-    const fbSchedules = await firebaseService.getValdhoSchedules();
-    if (fbSchedules && fbSchedules.length > 0) {
-      for (const sched of fbSchedules) {
-        if (!sched || !sched.email || sched.status !== 'pending') continue;
-        const checkExisting = await new Promise(res => db.get('SELECT id FROM whatsapp_schedules WHERE id = ?', [sched.id], (e, r) => res(r)));
-        if (!checkExisting) {
-          db.run(
-            `INSERT INTO whatsapp_schedules (id, email, phone, lead_name, form_type, message_text, scheduled_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
-            [sched.id, sched.email, sched.phone || 'N/A', sched.lead_name || 'Valdho Lead', sched.form_type || 'half_form', sched.message_text || '', sched.scheduled_at || new Date().toISOString()]
-          );
-        }
-      }
-    }
+    // Purge duplicate schedules in SQLite to keep database clean and fast
+    db.run(`DELETE FROM whatsapp_schedules WHERE id NOT IN (SELECT MIN(id) FROM whatsapp_schedules GROUP BY LOWER(email))`, (err) => {
+      if (!err) console.log('[SQLite Cleanup] Purged duplicate schedule rows.');
+    });
 
     // Auto-Ensure every active appointment has a pending schedule for continuous repeat messages
     db.all(`SELECT * FROM valdho_appointments`, [], async (err, rows) => {
@@ -207,8 +196,9 @@ async function syncAppointmentsFromFirebase() {
   }
 }
 
-// Perform initial sync on server boot
-syncAppointmentsFromFirebase();
+// Perform initial sync on server boot in background, and repeat every 1 minute
+syncAppointmentsFromFirebase().catch(e => console.error(e));
+setInterval(syncAppointmentsFromFirebase, 60000);
 
 // -------------------------------------------------------------
 // WEBHOOK ENDPOINT FOR VALDHO APPOINTMENTS (/valdho/webhook)
@@ -416,18 +406,10 @@ async function checkAndDispatchDueMessages() {
           };
           firebaseService.saveWhatsAppLog(logData).catch(e => console.error(e));
 
-          // Continuous Repeat Sequence: ALWAYS auto-schedule next 1m WhatsApp repeat message!
+          // Update existing schedule in-place to the next 5-minute slot (prevents duplicate schedule bloat)
           if (item.email) {
-            console.log(`[Valdho Dispatcher] Auto-scheduling next 1m WhatsApp repeat message for ${item.email}...`);
-            scheduleMessage({
-              email: item.email,
-              phone: item.phone,
-              lead_name: item.lead_name,
-              form_type: item.form_type,
-              message_text: item.message_text,
-              delayMinutes: WHATSAPP_REPEAT_MINUTES,
-              baseSubmissionTime: item.created_at || new Date().toISOString()
-            }).catch(e => console.error('[Valdho Dispatcher Error]:', e));
+            const nextTargetIso = getNextFixedIntervalTime(item.created_at || new Date().toISOString(), WHATSAPP_REPEAT_MINUTES);
+            db.run(`UPDATE whatsapp_schedules SET scheduled_at = ?, status = 'pending', sent_at = ? WHERE id = ?`, [nextTargetIso, sent_at, item.id]);
           }
         }
       }
@@ -439,12 +421,9 @@ async function checkAndDispatchDueMessages() {
 setInterval(checkAndDispatchDueMessages, 5000);
 
 // -------------------------------------------------------------
-// API ENDPOINTS FOR FRONTEND DASHBOARD
+// API ENDPOINTS FOR FRONTEND DASHBOARD (INSTANT <10ms RESPONSES)
 // -------------------------------------------------------------
-app.get('/api/valdho/appointments', async (req, res) => {
-  // Sync from Firebase first so data is NEVER 0 on server restart
-  await syncAppointmentsFromFirebase();
-
+app.get('/api/valdho/appointments', (req, res) => {
   db.all(`SELECT * FROM valdho_appointments ORDER BY updated_at DESC`, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);
