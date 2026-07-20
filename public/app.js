@@ -133,7 +133,7 @@ function renderValdhoTable() {
     const emailKey = email.toLowerCase().trim().replace(/[^a-zA-Z0-9]/g, '_');
     const leadSched = (scheduledQueue || []).find(s => s.email && s.email.toLowerCase().trim() === email.toLowerCase().trim() && s.status === 'pending');
     
-    let leadCountdownHtml = getCountdownBadgeHtml(leadSched ? leadSched.scheduled_at : null, isCompleted);
+    let leadCountdownHtml = getCountdownBadgeHtml(leadSched ? leadSched.scheduled_at : null, isCompleted, app.created_at || app.updated_at);
 
     return `
       <tr>
@@ -188,12 +188,31 @@ function updateValdhoStats() {
 // -------------------------------------------------------------
 // LIVE COUNTDOWN TIMER CALCULATOR (1-SECOND REAL-TIME DECREASE)
 // -------------------------------------------------------------
-function getCountdownBadgeHtml(targetIso, isCompleted) {
-  if (!targetIso) {
-    return '<span class="badge badge-pending" style="background-color: #fef3c7; color: #92400e; font-weight: 600;">Scheduling next 1m repeat... ⏳</span>';
+function getNextIntervalTargetIso(submissionIsoStr, intervalMinutes = 1) {
+  const baseMs = new Date(submissionIsoStr || Date.now()).getTime();
+  const nowMs = Date.now();
+  const intervalMs = (intervalMinutes || 1) * 60 * 1000;
+
+  if (nowMs < baseMs) {
+    return new Date(baseMs + intervalMs).toISOString();
   }
 
-  const diffMs = new Date(targetIso).getTime() - Date.now();
+  const elapsedMs = nowMs - baseMs;
+  const slotsPassed = Math.floor(elapsedMs / intervalMs);
+  const nextSlotIndex = slotsPassed + 1;
+
+  const nextTargetMs = baseMs + (nextSlotIndex * intervalMs);
+  return new Date(nextTargetMs).toISOString();
+}
+
+function getCountdownBadgeHtml(targetIso, isCompleted, submissionTime) {
+  let effectiveTarget = targetIso;
+
+  if (!effectiveTarget) {
+    effectiveTarget = getNextIntervalTargetIso(submissionTime, isCompleted ? 1 : 5);
+  }
+
+  const diffMs = new Date(effectiveTarget).getTime() - Date.now();
 
   if (diffMs <= 0) {
     return `<span class="badge" style="background-color: #ef4444; color: white; font-weight: 600;">⚡ Sending WhatsApp Repeat...</span>`;
@@ -228,7 +247,7 @@ function startCountdownTicker() {
         if (el) {
           const leadSched = (scheduledQueue || []).find(s => s.email && s.email.toLowerCase().trim() === email && s.status === 'pending');
           const isCompleted = app.status === 'completed' || (app.step2_data && Object.keys(app.step2_data).length > 0);
-          el.innerHTML = getCountdownBadgeHtml(leadSched ? leadSched.scheduled_at : null, isCompleted);
+          el.innerHTML = getCountdownBadgeHtml(leadSched ? leadSched.scheduled_at : null, isCompleted, app.created_at || app.updated_at);
         }
       });
     }

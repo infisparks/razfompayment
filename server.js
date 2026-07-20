@@ -416,8 +416,8 @@ async function checkAndDispatchDueMessages() {
           };
           firebaseService.saveWhatsAppLog(logData).catch(e => console.error(e));
 
-          // Continuous Repeat Sequence: Auto-schedule next 1m WhatsApp message!
-          if (result.success && item.email) {
+          // Continuous Repeat Sequence: ALWAYS auto-schedule next 1m WhatsApp repeat message!
+          if (item.email) {
             console.log(`[Valdho Dispatcher] Auto-scheduling next 1m WhatsApp repeat message for ${item.email}...`);
             scheduleMessage({
               email: item.email,
@@ -425,7 +425,8 @@ async function checkAndDispatchDueMessages() {
               lead_name: item.lead_name,
               form_type: item.form_type,
               message_text: item.message_text,
-              delayMinutes: WHATSAPP_REPEAT_MINUTES
+              delayMinutes: WHATSAPP_REPEAT_MINUTES,
+              baseSubmissionTime: item.created_at || new Date().toISOString()
             }).catch(e => console.error('[Valdho Dispatcher Error]:', e));
           }
         }
