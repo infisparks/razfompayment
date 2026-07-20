@@ -66,62 +66,16 @@ async function deleteValdhoAppointment(email) {
   }
 }
 
-/**
- * Save or update a scheduled WhatsApp message in Firebase under `/firstoption_agency_schedules/{scheduleId}`
- */
-async function saveValdhoSchedule(scheduleData) {
-  if (!scheduleData || !scheduleData.id) return { success: false, error: 'Missing schedule id' };
-
-  const schedId = scheduleData.id;
-  const nodePath = `firstoption_agency_schedules/${schedId}`;
-  const payload = {
-    ...scheduleData,
-    updated_at: new Date().toISOString()
-  };
-
-  try {
-    const targetUrl = `${databaseUrl}/${nodePath}.json`;
-    await axios.put(targetUrl, payload, { timeout: 10000 });
-    console.log(`[Firebase REST API] Schedule ${schedId} saved under /${nodePath}`);
-    return { success: true };
-  } catch (err) {
-    console.error(`[Firebase REST Error] Failed to save schedule ${schedId}:`, err.message || err);
-    return { success: false, error: err.message };
-  }
+async function saveValdhoSchedule() {
+  return { success: true };
 }
 
-/**
- * Fetch all scheduled messages under `/firstoption_agency_schedules`
- */
 async function getValdhoSchedules() {
-  const nodePath = `firstoption_agency_schedules`;
-  try {
-    const targetUrl = `${databaseUrl}/${nodePath}.json`;
-    const response = await axios.get(targetUrl, { timeout: 10000 });
-    const data = response.data;
-    return data ? Object.values(data) : [];
-  } catch (err) {
-    console.error('[Firebase REST Error] Failed to fetch Valdho schedules:', err.message || err);
-    return [];
-  }
+  return [];
 }
 
-/**
- * Delete schedule from Firebase under `/firstoption_agency_schedules/{scheduleId}`
- */
-async function deleteValdhoSchedule(schedId) {
-  if (!schedId) return { success: false, error: 'Missing schedule id' };
-  const nodePath = `firstoption_agency_schedules/${schedId}`;
-
-  try {
-    const targetUrl = `${databaseUrl}/${nodePath}.json`;
-    await axios.delete(targetUrl, { timeout: 10000 });
-    console.log(`[Firebase REST API] Deleted schedule under /${nodePath}`);
-    return { success: true };
-  } catch (err) {
-    console.error(`[Firebase REST Error] Failed to delete schedule:`, err.message || err);
-    return { success: false, error: err.message };
-  }
+async function deleteValdhoSchedule() {
+  return { success: true };
 }
 
 /**

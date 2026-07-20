@@ -128,13 +128,21 @@ async function syncAppointmentsFromFirebase() {
       for (const item of fbList) {
         if (!item || !item.email) continue;
         const email = item.email;
-        const name = item.name || 'Valdho Lead';
-        const phone = item.phone || 'N/A';
+        const step1Obj = typeof item.step1_data === 'string' ? JSON.parse(item.step1_data || '{}') : (item.step1_data || {});
+        const step2Obj = typeof item.step2_data === 'string' ? JSON.parse(item.step2_data || '{}') : (item.step2_data || {});
+        const allObj = typeof item.all_form_data === 'string' ? JSON.parse(item.all_form_data || '{}') : (item.all_form_data || {});
+
+        const name = (item.name && item.name !== 'Valdho Lead' ? item.name : null)
+          || extractDeepName(step1Obj) || extractDeepName(allObj) || extractDeepName(step2Obj) || 'Valdho Lead';
+
+        const phone = (item.phone && item.phone !== 'N/A' ? item.phone : null)
+          || extractDeepPhone(step1Obj) || extractDeepPhone(allObj) || extractDeepPhone(step2Obj) || 'N/A';
+
         const status = item.status || 'step1_received';
         const meta_sent = item.meta_sent ? 1 : 0;
-        const step1Str = typeof item.step1_data === 'object' ? JSON.stringify(item.step1_data) : (item.step1_data || '{}');
-        const step2Str = typeof item.step2_data === 'object' ? JSON.stringify(item.step2_data) : (item.step2_data || '{}');
-        const allDataStr = typeof item.all_form_data === 'object' ? JSON.stringify(item.all_form_data) : (item.all_form_data || '{}');
+        const step1Str = JSON.stringify(step1Obj);
+        const step2Str = JSON.stringify(step2Obj);
+        const allDataStr = JSON.stringify(allObj);
         const updatedAt = item.updated_at || new Date().toISOString();
 
         const insertQuery = `
@@ -262,14 +270,46 @@ app.post('/valdho/webhook', async (req, res) => {
       try { if (existing.all_form_data) mergedAll = { ...JSON.parse(existing.all_form_data), ...payload }; } catch (e) {}
     }
 
+// Recursive Deep Extractor for Name
+function extractDeepName(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  for (const k of Object.keys(obj)) {
+    const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if ((kLower.includes('name') || kLower.includes('firstname') || kLower.includes('first')) && typeof obj[k] === 'string') {
+      const val = obj[k].trim();
+      if (val && val !== 'Valdho Lead' && !val.includes('@')) return val;
+    }
+    if (typeof obj[k] === 'object') {
+      const found = extractDeepName(obj[k]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+// Recursive Deep Extractor for Phone
+function extractDeepPhone(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  for (const k of Object.keys(obj)) {
+    const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if ((kLower.includes('phone') || kLower.includes('mobile') || kLower.includes('contact') || kLower.includes('number')) && typeof obj[k] === 'string') {
+      const digits = obj[k].replace(/\D/g, '');
+      if (digits.length >= 10) return obj[k].trim();
+    }
+    if (typeof obj[k] === 'object') {
+      const found = extractDeepPhone(obj[k]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
     // Extract REAL Name & Phone by checking current payload, mergedStep1, mergedAll, AND existing record!
-    const finalName = formData['First Name'] || formData.name || formData.first_name || payload['First Name'] || payload.name
-      || mergedStep1['First Name'] || mergedStep1.name || mergedStep1.first_name
+    const finalName = extractDeepName(formData) || extractDeepName(payload) || extractDeepName(mergedStep1) || extractDeepName(mergedAll)
       || (existing && existing.name && existing.name !== 'Valdho Lead' ? existing.name : null)
       || 'Valdho Lead';
 
-    const finalPhone = formData['Phone Number'] || formData.phone || formData.mobile || payload['Phone Number'] || payload.phone
-      || mergedStep1['Phone Number'] || mergedStep1.phone || mergedStep1.mobile
+    const finalPhone = extractDeepPhone(formData) || extractDeepPhone(payload) || extractDeepPhone(mergedStep1) || extractDeepPhone(mergedAll)
       || (existing && existing.phone && existing.phone !== 'N/A' ? existing.phone : null)
       || 'N/A';
 

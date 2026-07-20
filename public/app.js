@@ -118,15 +118,45 @@ function renderValdhoTable() {
       ? `<span class="badge badge-captured" style="background-color: #ecfdf5; color: #059669; font-weight: 600;">Full Form Completed ✅</span>`
       : `<span class="badge badge-pending" style="background-color: #fffbebfb; color: #b45309; font-weight: 600;">⚠️ Half Form (Waiting for Full Form)</span>${metaBadge}`;
 
+function findDeepName(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  for (const k of Object.keys(obj)) {
+    const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if ((kLower.includes('name') || kLower.includes('firstname') || kLower.includes('first')) && typeof obj[k] === 'string') {
+      const val = obj[k].trim();
+      if (val && val !== 'Valdho Lead' && !val.includes('@')) return val;
+    }
+    if (typeof obj[k] === 'object') {
+      const found = findDeepName(obj[k]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function findDeepPhone(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  for (const k of Object.keys(obj)) {
+    const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if ((kLower.includes('phone') || kLower.includes('mobile') || kLower.includes('contact') || kLower.includes('number')) && typeof obj[k] === 'string') {
+      const digits = obj[k].replace(/\D/g, '');
+      if (digits.length >= 10) return obj[k].trim();
+    }
+    if (typeof obj[k] === 'object') {
+      const found = findDeepPhone(obj[k]);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
     const name = (app.name && app.name !== 'Valdho Lead' ? app.name : null)
-      || step1Data['First Name'] || step1Data.name || step1Data.first_name
-      || allData['First Name'] || allData.name || 'Valdho Lead';
+      || findDeepName(step1Data) || findDeepName(allData) || findDeepName(step2Data) || 'Valdho Lead';
 
     const email = app.email || step1Data['Email'] || step1Data.email || allData.email || 'N/A';
 
     const phone = (app.phone && app.phone !== 'N/A' ? app.phone : null)
-      || step1Data['Phone Number'] || step1Data.phone || step1Data.mobile
-      || allData['Phone Number'] || allData.phone || 'N/A';
+      || findDeepPhone(step1Data) || findDeepPhone(allData) || findDeepPhone(step2Data) || 'N/A';
 
     const updatedDate = app.updated_at || app.created_at ? new Date(app.updated_at || app.created_at).toLocaleString('en-IN') : '-';
 
@@ -189,20 +219,17 @@ function updateValdhoStats() {
 // LIVE COUNTDOWN TIMER CALCULATOR (1-SECOND REAL-TIME DECREASE BASED ON SUBMISSION TIME)
 // -------------------------------------------------------------
 function get5MinNextIntervalTargetIso(submissionIsoStr) {
-  const baseMs = new Date(submissionIsoStr || Date.now()).getTime();
-  const nowMs = Date.now();
-  const intervalMs = 5 * 60 * 1000; // Fixed 5 minutes
+  const subDate = new Date(submissionIsoStr || Date.now());
+  const now = new Date();
 
-  if (nowMs < baseMs) {
-    return new Date(baseMs + intervalMs).toISOString();
+  if (isNaN(subDate.getTime())) return new Date(now.getTime() + 300000).toISOString();
+
+  let target = new Date(subDate.getTime());
+  while (target.getTime() <= now.getTime()) {
+    target.setMinutes(target.getMinutes() + 5);
   }
 
-  const elapsedMs = nowMs - baseMs;
-  const slotsPassed = Math.floor(elapsedMs / intervalMs);
-  const nextSlotIndex = slotsPassed + 1;
-
-  const nextTargetMs = baseMs + (nextSlotIndex * intervalMs);
-  return new Date(nextTargetMs).toISOString();
+  return target.toISOString();
 }
 
 function getCountdownBadgeHtml(targetIso, isCompleted, submissionTime) {
