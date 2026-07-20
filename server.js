@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const crypto = require('crypto');
 const db = require('./db');
 const firebaseService = require('./services/firebaseService');
 const evolutionWhatsappService = require('./services/evolutionWhatsappService');
@@ -10,7 +9,6 @@ const metaCapiService = require('./services/metaCapiService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'test_secret';
 
 // Enable CORS
 app.use(cors());
@@ -18,14 +16,14 @@ app.use(cors());
 // Serve static assets from 'public' directory
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Middleware to capture the raw body for signature verification
+// JSON Middleware
 app.use(express.json({
   verify: (req, res, buf) => {
     req.rawBody = buf.toString();
   }
 }));
 
-// Page routes serving single unified index.html
+// Serve single canonical template public/index.html for ALL page routes
 app.get(['/', '/valdho', '/valdho_first_option_agency', '/valdho_first_option_agency.html', '/index.html'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -36,18 +34,20 @@ app.get('/health', (req, res) => {
 });
 
 // -------------------------------------------------------------
-// HARDCODED MESSAGE TEMPLATES & 10m INTERVAL CONFIGURATION
+// HARDCODED MESSAGE TEMPLATES & TIMING CONFIGURATION
 // -------------------------------------------------------------
-const INTERVAL_MINUTES = parseInt(process.env.META_DELAY_MINUTES || '10', 10);
+const META_DELAY_MINUTES = 5; // Wait 5m after Step 1 before Meta retargeting event
+const WHATSAPP_REPEAT_MINUTES = 1; // Repeat WhatsApp messages every 1m
 
 const HARDCODED_HALF_FORM_TEMPLATE = `*Dear {name},*\n\nWe noticed you started your appointment request. Please complete the remaining steps in the form to finalize your booking.\n\nOur team is here to assist you!\n\n*Thank you!*`;
 
 const HARDCODED_FULL_FORM_TEMPLATE = `*Dear {name},*\n\nYour appointment registration has been successfully received!\n\n*Details:* {answers}\n\nOur team will contact you shortly to confirm the appointment schedule.\n\n*Thank you for choosing us!*`;
 
-// Helper: Schedule WhatsApp message for 5 minutes in future
-function scheduleMessage({ email, phone, lead_name, form_type, message_text, interval }) {
+// Helper: Schedule WhatsApp message for specified minutes in future
+function scheduleMessage({ email, phone, lead_name, form_type, message_text, delayMinutes }) {
   let targetDate = new Date();
-  targetDate.setMinutes(targetDate.getMinutes() + (INTERVAL_MINUTES || 5));
+  const minsToAdd = typeof delayMinutes === 'number' ? delayMinutes : (form_type === 'half_form' ? META_DELAY_MINUTES : WHATSAPP_REPEAT_MINUTES);
+  targetDate.setMinutes(targetDate.getMinutes() + minsToAdd);
   const targetDateStr = targetDate.toISOString();
 
   return new Promise((resolve, reject) => {
@@ -75,7 +75,7 @@ function scheduleMessage({ email, phone, lead_name, form_type, message_text, int
       };
 
       firebaseService.saveValdhoSchedule(scheduleRecord).catch(e => console.error(e));
-      console.log(`[Valdho Scheduler] Scheduled ID ${scheduleRecord.id} for ${phone} at ${targetDateStr}`);
+      console.log(`[Valdho Scheduler] Scheduled ID ${scheduleRecord.id} for ${phone} at ${targetDateStr} (${minsToAdd}m delay)`);
       resolve(scheduleRecord);
     });
   });
@@ -97,6 +97,51 @@ function cancelSchedulesForEmail(email) {
   });
 }
 
+// Helper: Restore and sync appointments from Firebase into SQLite so 0 data NEVER happens on server restart
+async function syncAppointmentsFromFirebase() {
+  try {
+    const fbList = await firebaseService.getValdhoAppointments();
+    if (fbList && fbList.length > 0) {
+      for (const item of fbList) {
+        if (!item || !item.email) continue;
+        const email = item.email;
+        const name = item.name || 'Valdho Lead';
+        const phone = item.phone || 'N/A';
+        const status = item.status || 'step1_received';
+        const meta_sent = item.meta_sent ? 1 : 0;
+        const step1Str = typeof item.step1_data === 'object' ? JSON.stringify(item.step1_data) : (item.step1_data || '{}');
+        const step2Str = typeof item.step2_data === 'object' ? JSON.stringify(item.step2_data) : (item.step2_data || '{}');
+        const allDataStr = typeof item.all_form_data === 'object' ? JSON.stringify(item.all_form_data) : (item.all_form_data || '{}');
+        const updatedAt = item.updated_at || new Date().toISOString();
+
+        const insertQuery = `
+          INSERT INTO valdho_appointments (email, name, phone, status, meta_sent, step1_data, step2_data, all_form_data, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(email) DO UPDATE SET
+            name = CASE WHEN excluded.name != 'Valdho Lead' THEN excluded.name ELSE valdho_appointments.name END,
+            phone = CASE WHEN excluded.phone != 'N/A' THEN excluded.phone ELSE valdho_appointments.phone END,
+            status = excluded.status,
+            meta_sent = MAX(valdho_appointments.meta_sent, excluded.meta_sent),
+            step1_data = excluded.step1_data,
+            step2_data = excluded.step2_data,
+            all_form_data = excluded.all_form_data,
+            updated_at = excluded.updated_at
+        `;
+
+        await new Promise((res) => {
+          db.run(insertQuery, [email, name, phone, status, meta_sent, step1Str, step2Str, allDataStr, updatedAt, updatedAt], () => res());
+        });
+      }
+      console.log(`[Firebase Auto Sync] Restored ${fbList.length} appointment(s) from Firebase into SQLite.`);
+    }
+  } catch (err) {
+    console.error('[Firebase Auto Sync Error]:', err.message);
+  }
+}
+
+// Perform initial sync on server boot
+syncAppointmentsFromFirebase();
+
 // -------------------------------------------------------------
 // WEBHOOK ENDPOINT FOR VALDHO APPOINTMENTS (/valdho/webhook)
 // -------------------------------------------------------------
@@ -107,7 +152,7 @@ app.post('/valdho/webhook', async (req, res) => {
 
     const formData = payload.form_data || payload;
 
-    // Extract Email (Searches for any key containing 'email')
+    // Extract Email
     let email = null;
     Object.keys(formData).forEach(k => {
       if (k.toLowerCase().includes('email') && typeof formData[k] === 'string' && formData[k].includes('@')) {
@@ -128,10 +173,6 @@ app.post('/valdho/webhook', async (req, res) => {
       return res.status(400).json({ status: 'error', error: 'Missing email in payload' });
     }
 
-    // Extract Name & Phone
-    const name = formData['First Name'] || formData.name || formData.first_name || payload['First Name'] || payload.name || 'Valdho Lead';
-    const phone = formData['Phone Number'] || formData.phone || formData.mobile || payload['Phone Number'] || payload.phone || 'N/A';
-
     const emailKey = email.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
     const formDataKeys = Object.keys(formData);
@@ -148,8 +189,7 @@ app.post('/valdho/webhook', async (req, res) => {
       step1Data = formData;
     }
 
-    // Save to SQLite
-    const statusStr = isCompleted ? 'completed' : 'step1_received';
+    // Existing lead lookup
     const existing = await new Promise((res) => {
       db.get('SELECT * FROM valdho_appointments WHERE LOWER(email) = LOWER(?)', [email], (err, row) => res(row));
     });
@@ -176,10 +216,11 @@ app.post('/valdho/webhook', async (req, res) => {
       || 'N/A';
 
     const finalStatus = (existing && existing.status === 'completed') || isCompleted ? 'completed' : 'step1_received';
+    const metaSentFlag = existing ? (existing.meta_sent ? 1 : 0) : 0;
 
     const insertQuery = `
-      INSERT INTO valdho_appointments (email, name, phone, status, step1_data, step2_data, all_form_data, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      INSERT INTO valdho_appointments (email, name, phone, status, meta_sent, step1_data, step2_data, all_form_data, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       ON CONFLICT(email) DO UPDATE SET
         name = CASE WHEN excluded.name != 'Valdho Lead' THEN excluded.name ELSE valdho_appointments.name END,
         phone = CASE WHEN excluded.phone != 'N/A' THEN excluded.phone ELSE valdho_appointments.phone END,
@@ -192,20 +233,21 @@ app.post('/valdho/webhook', async (req, res) => {
 
     await new Promise((resolve, reject) => {
       db.run(insertQuery, [
-        email, finalName, finalPhone, finalStatus,
+        email, finalName, finalPhone, finalStatus, metaSentFlag,
         JSON.stringify(mergedStep1), JSON.stringify(mergedStep2), JSON.stringify(mergedAll)
       ], function(err) {
         if (err) reject(err); else resolve();
       });
     });
 
-    // Save to Firebase under /firstoption_agency/{email_key}
+    // Save cleanly to Firebase under /firstoption_agency/{email_key}
     const fbRecord = {
+      company: 'firstoption_agency',
       email,
       name: finalName,
       phone: finalPhone,
-      company: 'firstoption_agency',
       status: finalStatus,
+      meta_sent: metaSentFlag === 1,
       step1_data: mergedStep1,
       step2_data: mergedStep2,
       all_form_data: mergedAll,
@@ -214,22 +256,22 @@ app.post('/valdho/webhook', async (req, res) => {
 
     firebaseService.saveValdhoAppointment(emailKey, fbRecord).catch(e => console.error(e));
 
-    // Auto-Schedule 5-minute WhatsApp message
+    // Auto-Schedule WhatsApp follow-up sequence
     if (finalStatus === 'completed') {
-      console.log(`[Auto Scheduler] Lead ${email} completed Step 2 (Full Form). Canceling all Step 1 Half Form reminders!`);
+      console.log(`[Auto Scheduler] Lead ${email} completed Step 2 (Full Form). Canceling Step 1 Half Form reminders!`);
       await cancelSchedulesForEmail(email);
 
       const choices = [];
       Object.keys(mergedAll).forEach(k => { if (Array.isArray(mergedAll[k])) choices.push(...mergedAll[k]); });
       const msgText = HARDCODED_FULL_FORM_TEMPLATE.replace(/\{name\}/g, finalName).replace(/\{answers\}/g, choices.join(', ') || 'Step 2 Completed');
 
-      await scheduleMessage({ email, phone: finalPhone, lead_name: finalName, form_type: 'full_form', message_text: msgText });
+      await scheduleMessage({ email, phone: finalPhone, lead_name: finalName, form_type: 'full_form', message_text: msgText, delayMinutes: WHATSAPP_REPEAT_MINUTES });
     } else {
       const msgText = HARDCODED_HALF_FORM_TEMPLATE.replace(/\{name\}/g, finalName);
-      await scheduleMessage({ email, phone: finalPhone, lead_name: finalName, form_type: 'half_form', message_text: msgText });
+      await scheduleMessage({ email, phone: finalPhone, lead_name: finalName, form_type: 'half_form', message_text: msgText, delayMinutes: META_DELAY_MINUTES });
     }
 
-    res.json({ status: 'ok', message: 'Webhook processed & 5m sequence scheduled successfully', email, form_type: finalStatus });
+    res.json({ status: 'ok', message: 'Webhook processed successfully', email, form_type: finalStatus });
   } catch (err) {
     console.error('[Valdho Webhook Error]:', err.message);
     res.status(500).json({ status: 'error', error: err.message });
@@ -237,7 +279,7 @@ app.post('/valdho/webhook', async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// BACKGROUND DISPATCH TICKER (CONTINUOUS 5m REPEAT SEQUENCE)
+// BACKGROUND DISPATCH TICKER (5m META EVENT & 1m WHATSAPP REPEATS)
 // -------------------------------------------------------------
 async function checkAndDispatchDueMessages() {
   const nowIso = new Date().toISOString();
@@ -250,10 +292,10 @@ async function checkAndDispatchDueMessages() {
       if (dueList && dueList.length > 0) {
         console.log(`[Valdho Dispatcher] Found ${dueList.length} due message(s).`);
         for (const item of dueList) {
-          // Safety Check: If this is a Half Form message, verify lead hasn't completed Step 2 in the meantime
+          // Check safety & Meta retargeting event
           if (item.form_type === 'half_form' && item.email) {
             const leadRow = await new Promise((res) => {
-              db.get('SELECT status, step2_data FROM valdho_appointments WHERE LOWER(email) = LOWER(?)', [item.email], (e, r) => res(r));
+              db.get('SELECT status, meta_sent, step2_data FROM valdho_appointments WHERE LOWER(email) = LOWER(?)', [item.email], (e, r) => res(r));
             });
 
             let hasStep2 = false;
@@ -266,18 +308,27 @@ async function checkAndDispatchDueMessages() {
             }
 
             if (hasStep2) {
-              console.log(`[Scheduler Safety] Lead ${item.email} completed Full Form! Deleting Half Form schedule ID ${item.id} (Meta CAPI event canceled).`);
+              console.log(`[Scheduler Safety] Lead ${item.email} completed Full Form! Deleting Half Form schedule ID ${item.id}.`);
               db.run(`DELETE FROM whatsapp_schedules WHERE id = ?`, [item.id]);
               firebaseService.deleteValdhoSchedule(item.id).catch(e => console.error(e));
               continue;
             }
 
-            // Lead DID NOT complete Step 2 after 10m -> Trigger Meta Retargeting Event (CAPI)!
-            console.log(`[Meta Retargeting Engine] Lead ${item.email} abandoned Half Form after 10 minutes. Sending Meta CAPI LeadIncomplete event!`);
-            metaCapiService.sendMetaRetargetingEvent(item.email, item.phone, item.lead_name).catch(e => console.error(e));
+            // Lead HAS NOT completed Step 2 after 5m -> Trigger Meta Retargeting Event EXACTLY 1 TIME PER LEAD!
+            if (leadRow && !leadRow.meta_sent) {
+              console.log(`[Meta Retargeting Engine] Lead ${item.email} waiting for Full Form (5m passed). Dispatching Meta CAPI LeadIncomplete event (1-TIME ONLY)!`);
+              
+              // Mark meta_sent = 1 locally and in Firebase
+              db.run(`UPDATE valdho_appointments SET meta_sent = 1 WHERE LOWER(email) = LOWER(?)`, [item.email]);
+              const emailKey = item.email.toLowerCase().replace(/[^a-z0-9]/g, '_');
+              firebaseService.saveValdhoAppointment(emailKey, { email: item.email, meta_sent: true }).catch(e => console.error(e));
+
+              // Send to Meta CAPI
+              metaCapiService.sendMetaRetargetingEvent(item.email, item.phone, item.lead_name).catch(e => console.error(e));
+            }
           }
 
-          // Dispatch message via Evolution API
+          // Dispatch WhatsApp message via Evolution API
           console.log(`[Valdho Dispatcher] Dispatching message ID ${item.id} to ${item.phone}...`);
           const result = await evolutionWhatsappService.sendEvolutionWhatsApp(item.phone, item.message_text);
 
@@ -297,15 +348,16 @@ async function checkAndDispatchDueMessages() {
           };
           firebaseService.saveWhatsAppLog(logData).catch(e => console.error(e));
 
-          // Continuous Repeat Sequence: Auto-schedule next 5m message!
+          // Continuous Repeat Sequence: Auto-schedule next 1m WhatsApp message!
           if (result.success && item.email) {
-            console.log(`[Valdho Dispatcher] Auto-scheduling next 5m repeat message for ${item.email}...`);
+            console.log(`[Valdho Dispatcher] Auto-scheduling next 1m WhatsApp repeat message for ${item.email}...`);
             scheduleMessage({
               email: item.email,
               phone: item.phone,
               lead_name: item.lead_name,
               form_type: item.form_type,
-              message_text: item.message_text
+              message_text: item.message_text,
+              delayMinutes: WHATSAPP_REPEAT_MINUTES
             }).catch(e => console.error('[Valdho Dispatcher Error]:', e));
           }
         }
@@ -320,7 +372,10 @@ setInterval(checkAndDispatchDueMessages, 5000);
 // -------------------------------------------------------------
 // API ENDPOINTS FOR FRONTEND DASHBOARD
 // -------------------------------------------------------------
-app.get('/api/valdho/appointments', (req, res) => {
+app.get('/api/valdho/appointments', async (req, res) => {
+  // Sync from Firebase first so data is NEVER 0 on server restart
+  await syncAppointmentsFromFirebase();
+
   db.all(`SELECT * FROM valdho_appointments ORDER BY updated_at DESC`, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows || []);

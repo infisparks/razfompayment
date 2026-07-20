@@ -65,6 +65,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 step2_data TEXT,
                 all_form_data TEXT,
                 status TEXT DEFAULT 'step1_received',
+                meta_sent INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
               )
@@ -73,6 +74,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 console.error('Error creating valdho_appointments table:', valdhoTableErr.message);
               } else {
                 console.log('valdho_appointments table ready.');
+
+                // Auto-migrate column if missing
+                db.run(`ALTER TABLE valdho_appointments ADD COLUMN meta_sent INTEGER DEFAULT 0`, () => {});
 
                 // Create whatsapp_schedules table if it doesn't exist
                 db.run(`

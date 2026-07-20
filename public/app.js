@@ -108,8 +108,8 @@ function renderValdhoTable() {
       : '<em style="color: #d97706; font-size: 13px; font-weight: 500;">⚠️ Step 2 Pending...</em>';
 
     const statusBadge = isCompleted
-      ? `<span class="badge badge-captured">Full Form (Completed)</span>`
-      : `<span class="badge badge-pending">Half Form (Step 1 Only)</span>`;
+      ? `<span class="badge badge-captured" style="background-color: #ecfdf5; color: #059669; font-weight: 600;">Full Form Completed ✅</span>`
+      : `<span class="badge badge-pending" style="background-color: #fffbebfb; color: #b45309; font-weight: 600;">⚠️ Half Form (Waiting for Full Form)</span>`;
 
     const name = (app.name && app.name !== 'Valdho Lead' ? app.name : null)
       || step1Data['First Name'] || step1Data.name || step1Data.first_name
@@ -190,7 +190,7 @@ function getCountdownBadgeHtml(targetIso, isCompleted) {
   const diffMs = new Date(targetIso).getTime() - Date.now();
 
   if (diffMs <= 0) {
-    return `<span class="badge" style="background-color: #ef4444; color: white;">⚡ Sending 5m Message...</span>`;
+    return `<span class="badge" style="background-color: #ef4444; color: white;">⚡ Sending Message...</span>`;
   }
 
   const totalSecs = Math.floor(diffMs / 1000);
@@ -202,6 +202,10 @@ function getCountdownBadgeHtml(targetIso, isCompleted) {
     timeString = `${mins}m ${secs}s remaining`;
   } else {
     timeString = `${secs}s remaining`;
+  }
+
+  if (!isCompleted) {
+    return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 6px;">⏳ ${timeString} (Waiting for Full Form)</span>`;
   }
 
   return `<span class="badge" style="background-color: #e0e7ff; color: #3730a3; font-family: monospace; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 6px;">⏳ ${timeString}</span>`;
